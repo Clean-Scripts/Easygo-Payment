@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    <title>Easy Go | Payment</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .payment-step { transition: all 0.3s; }
+        .payment-step.active { border-color: #10b981; background-color: #f0fdf4; }
+    </style>
+</head>
+<body class="antialiased bg-gray-50">
+
+    <header class="relative mb-8">
+        <div class="h-40 overflow-hidden">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/Banner.png" 
+                 class="w-full h-full object-cover" alt="Easy Go Banner">
+        </div>
+        <div class="absolute -bottom-6 left-0 right-0 flex justify-center">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                 class="h-20 w-20 rounded-full border-4 border-white shadow-xl bg-white p-1">
+        </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto px-4 pt-10 pb-20">
+        <!-- Progress Steps -->
+        <div class="flex justify-center mb-12">
+            <div class="flex items-center">
+                <div class="payment-step w-12 h-12 rounded-full border-4 border-gray-300 flex items-center justify-center font-bold text-gray-500">
+                    1
+                </div>
+                <div class="w-24 h-1 bg-gray-300"></div>
+                <div class="payment-step w-12 h-12 rounded-full border-4 border-gray-300 flex items-center justify-center font-bold text-gray-500">
+                    2
+                </div>
+                <div class="w-24 h-1 bg-gray-300"></div>
+                <div class="payment-step w-12 h-12 rounded-full border-4 border-green-500 bg-green-500 text-white flex items-center justify-center font-bold">
+                    3
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Order Summary -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
+                    <h2 class="text-2xl font-bold mb-6">📦 Order Summary</h2>
+                    
+                    <div id="order-items" class="space-y-4 mb-6">
+                        <!-- Items loaded from localStorage -->
+                    </div>
+                    
+                    <div class="border-t pt-6">
+                        <h3 class="font-bold mb-4">📝 Customer Details</h3>
+                        <div id="customer-details" class="space-y-2">
+                            <!-- Details loaded from localStorage -->
+                        </div>
+                    </div>
+                    
+                    <div class="border-t pt-6">
+                        <h3 class="font-bold mb-4">📍 Delivery Address</h3>
+                        <div id="delivery-address" class="space-y-2">
+                            <!-- Address loaded from localStorage -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Payment Instructions -->
+                <div class="bg-blue-50 border border-blue-200 rounded-3xl p-8">
+                    <h3 class="font-bold text-blue-800 mb-4">💳 Payment Instructions</h3>
+                    <ul class="space-y-2 text-blue-700">
+                        <li>✅ Amount is auto-calculated and cannot be edited</li>
+                        <li>✅ Scan QR code with any UPI app</li>
+                        <li>✅ Payment confirmation within 2 minutes</li>
+                        <li>✅ OTP will be generated after payment</li>
+                        <li>✅ Refunds processed within 5 working days</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Payment Section -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
+                    <h2 class="text-2xl font-bold mb-6">💰 Payment Bifurcation</h2>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div class="flex justify-between">
+                            <span>Food Items Total</span>
+                            <span id="food-total">₹0</span>
+                        </div>
+                        
+                        <div id="coupon-row" class="flex justify-between text-green-600 hidden">
+                            <span>Coupon Discount</span>
+                            <span id="coupon-discount">-₹0</span>
+                        </div>
+                        
+                        <div class="flex justify-between">
+                            <span>GST on Food (5%)</span>
+                            <span id="gst-food">₹0</span>
+                        </div>
+                        
+                        <div id="delivery-row" class="hidden">
+                            <div class="flex justify-between">
+                                <span>Delivery Charge</span>
+                                <span id="delivery-charge">₹0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>GST on Delivery (18%)</span>
+                                <span id="gst-delivery">₹0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="border-t pt-4">
+                            <div class="flex justify-between text-xl font-bold">
+                                <span>Total Amount</span>
+                                <span id="final-total">₹0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- QR Payment -->
+                <div class="bg-white rounded-3xl shadow-lg p-8">
+                    <h2 class="text-2xl font-bold mb-6">📱 Scan to Pay</h2>
+                    
+                    <div class="text-center mb-6">
+                        <div id="qrcode" class="inline-block p-4 bg-white border-2 border-gray-200 rounded-2xl"></div>
+                    </div>
+                    
+                    <div class="text-center mb-6">
+                        <p class="text-3xl font-bold text-green-600 mb-2" id="payment-amount">₹0</p>
+                        <p class="text-gray-600 text-sm">Fixed amount - cannot be edited</p>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <button id="payment-success" 
+                                class="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xl font-bold rounded-2xl hover:opacity-90 transition-opacity">
+                            ✅ I've Made the Payment
+                        </button>
+                        
+                        <button id="payment-failed" 
+                                class="w-full py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-colors">
+                            ❌ Payment Failed
+                        </button>
+                        
+                        <a href="https://clean-scripts.github.io/Easygo-Address/" 
+                           class="block text-center text-gray-600 hover:text-gray-900">
+                            ← Back to Address
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <div class="text-6xl mb-6">🎉</div>
+                <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
+                <p class="text-gray-600 mb-6">Order details sent to EasyGo. Your OTP is:</p>
+                
+                <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl" id="generated-otp">
+                    123456
+                </div>
+                
+                <p class="text-sm text-gray-500 mb-6">
+                    Share this OTP with delivery partner. Redirecting to tracking...
+                </p>
+                
+                <button id="go-to-tracking" 
+                        class="w-full py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors">
+                    Track Your Order →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load order data
+        let orderData = {};
+        let finalAmount = 0;
+        let otp = '';
+
+        function loadOrderData() {
+            // Load cart
+            const cart = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+            
+            // Load address and delivery data
+            const address = JSON.parse(localStorage.getItem('easygo-address')) || {};
+            const delivery = JSON.parse(localStorage.getItem('easygo-delivery')) || {};
+            const coupon = JSON.parse(localStorage.getItem('easygo-coupon')) || null;
+            
+            // Calculate totals
+            let foodTotal = parseFloat(localStorage.getItem('easygo-cart-total')) || 0;
+            let discount = 0;
+            
+            if (coupon) {
+                if (coupon.type === 'percent') {
+                    discount = foodTotal * (coupon.discount / 100);
+                } else {
+                    discount = coupon.discount;
+                }
+                document.getElementById('coupon-row').classList.remove('hidden');
+                document.getElementById('coupon-discount').textContent = `-₹${discount.toFixed(2)}`;
+            }
+            
+            const foodAfterDiscount = foodTotal - discount;
+            const gstFood = foodAfterDiscount * 0.05;
+            
+            let deliveryCharge = 0;
+            let gstDelivery = 0;
+            
+            if (delivery.mode === 'delivery') {
+                deliveryCharge = parseFloat(delivery.charge) || 0;
+                gstDelivery = deliveryCharge * 0.18;
+                document.getElementById('delivery-row').classList.remove('hidden');
+                document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
+                document.getElementById('gst-delivery').textContent = `₹${gstDelivery.toFixed(2)}`;
+            }
+            
+            finalAmount = foodAfterDiscount + gstFood + deliveryCharge + gstDelivery;
+            
+            // Update UI
+            document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
+            document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
+            document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
+            document.getElementById('payment-amount').textContent = `₹${finalAmount.toFixed(2)}`;
+            
+            // Generate QR code
+            new QRCode(document.getElementById("qrcode"), {
+                text: `upi://pay?pa=easygo@upi&am=${finalAmount}&cu=INR&tn=EasyGo Order`,
+                width: 200,
+                height: 200
+            });
+            
+            // Render items
+            renderOrderItems(cart);
+            
+            // Render details
+            renderDetails(address, delivery);
+            
+            // Store order data
+            orderData = {
+                cart: cart,
+                address: address,
+                delivery: delivery,
+                coupon: coupon,
+                totals: {
+                    foodTotal: foodTotal,
+                    discount: discount,
+                    gstFood: gstFood,
+                    deliveryCharge: deliveryCharge,
+                    gstDelivery: gstDelivery,
+                    finalAmount: finalAmount
+                }
+            };
+        }
+        
+        function renderOrderItems(cart) {
+            const container = document.getElementById('order-items');
+            let html = '';
+            
+            cart.forEach(item => {
+                html += `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-medium">${item.name}</p>
+                            <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
+                        </div>
+                        <span class="font-bold">₹${item.total}</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function getPackName(pack) {
+            const names = {
+                'piece': 'Piece',
+                'standard': 'Standard',
+                'family': 'Family Pack',
+                'xl': 'Extra Large'
+            };
+            return names[pack] || pack;
+        }
+        
+        function renderDetails(address, delivery) {
+            // Customer details
+            const customerDiv = document.getElementById('customer-details');
+            customerDiv.innerHTML = `
+                <p><strong>Name:</strong> ${address.name || 'Not provided'}</p>
+                <p><strong>Phone:</strong> ${address.phone || 'Not provided'}</p>
+            `;
+            
+            // Address
+            const addressDiv = document.getElementById('delivery-address');
+            if (delivery.mode === 'delivery') {
+                addressDiv.innerHTML = `
+                    <p><strong>📍 Delivery Address:</strong></p>
+                    <p>${address.houseNumber}, ${address.locality}</p>
+                    <p>${address.street}</p>
+                    <p>${address.city}, ${address.state} - ${address.pincode}</p>
+                    ${address.specialRequest ? `<p><strong>Special Request:</strong> ${address.specialRequest}</p>` : ''}
+                    <p class="text-sm text-blue-600 mt-2">
+                        <i class="fas fa-map-marker-alt"></i> 
+                        <a href="${delivery.locationLink}" target="_blank" class="underline">View Location on Map</a>
+                    </p>
+                `;
+            } else {
+                addressDiv.innerHTML = `
+                    <p><strong>🛍️ Takeaway Pickup:</strong></p>
+                    <p>Prime Square, Omaxe City 1, Indore</p>
+                    <p>Timings: 6:00 PM - 10:00 PM</p>
+                    <p class="text-sm text-green-600 mt-2">
+                        <i class="fas fa-clock"></i> Order will be ready in 20-25 minutes
+                    </p>
+                `;
+            }
+        }
+        
+        // Generate OTP
+        function generateOTP() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+        
+        // Save order to admin system
+        function saveOrderToAdmin(orderData, otp) {
+            // Get active orders
+            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
+            
+            // Create order object for admin
+            const adminOrder = {
+                orderId: Date.now().toString(),
+                customerName: orderData.address.name,
+                customerPhone: orderData.address.phone,
+                totalAmount: orderData.totals.finalAmount,
+                items: orderData.cart.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: item.total,
+                    pack: item.pack
+                })),
+                address: `${orderData.address.houseNumber}, ${orderData.address.locality}, ${orderData.address.city}`,
+                locationLink: orderData.delivery.locationLink,
+                deliveryMode: orderData.delivery.mode,
+                status: 'pending',
+                timestamp: new Date().toISOString(),
+                paymentMethod: 'UPI',
+                otp: otp
+            };
+            
+            // Add to active orders
+            activeOrders.push(adminOrder);
+            localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
+            
+            // Also save to all orders history
+            let allOrders = JSON.parse(localStorage.getItem('easygo-all-orders')) || [];
+            allOrders.push(adminOrder);
+            localStorage.setItem('easygo-all-orders', JSON.stringify(allOrders));
+            
+            return adminOrder;
+        }
+        
+        // Send WhatsApp message
+        function sendWhatsAppMessage(orderData, otp, adminOrder) {
+            let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
+            message += `*Order ID:* ${adminOrder.orderId}%0A`;
+            message += `*OTP:* ${otp}%0A`;
+            message += `*Status:* PENDING ⚠️%0A%0A`;
+            
+            // Add items
+            message += `*Items:*%0A`;
+            orderData.cart.forEach(item => {
+                message += `• ${item.name} (${getPackName(item.pack)}) × ${item.quantity} - ₹${item.total}%0A`;
+            });
+            
+            message += `%0A*Totals:*%0A`;
+            message += `Food Total: ₹${orderData.totals.foodTotal.toFixed(2)}%0A`;
+            if (orderData.totals.discount > 0) {
+                message += `Discount: -₹${orderData.totals.discount.toFixed(2)}%0A`;
+            }
+            message += `GST on Food: ₹${orderData.totals.gstFood.toFixed(2)}%0A`;
+            if (orderData.delivery.mode === 'delivery') {
+                message += `Delivery: ₹${orderData.totals.deliveryCharge.toFixed(2)}%0A`;
+                message += `GST on Delivery: ₹${orderData.totals.gstDelivery.toFixed(2)}%0A`;
+            }
+            message += `*TOTAL: ₹${orderData.totals.finalAmount.toFixed(2)}*%0A%0A`;
+            
+            // Customer details
+            message += `*Customer Details:*%0A`;
+            message += `Name: ${orderData.address.name}%0A`;
+            message += `Phone: ${orderData.address.phone}%0A%0A`;
+            
+            // Delivery/Takeaway info
+            if (orderData.delivery.mode === 'delivery') {
+                message += `*Delivery Address:*%0A`;
+                message += `${orderData.address.houseNumber}, ${orderData.address.locality}%0A`;
+                message += `${orderData.address.street}%0A`;
+                message += `${orderData.address.city}, ${orderData.address.state} - ${orderData.address.pincode}%0A`;
+                
+                if (orderData.address.specialRequest) {
+                    message += `%0A*Special Request:* ${orderData.address.specialRequest}%0A`;
+                }
+                
+                // Location link
+                if (orderData.delivery.locationLink) {
+                    message += `%0A📍 *Location Link:* ${orderData.delivery.locationLink}`;
+                }
+            } else {
+                message += `*Takeaway Pickup:*%0A`;
+                message += `Prime Square, Omaxe City 1, Indore%0A`;
+                message += `Customer will pickup order%0A`;
+            }
+            
+            // Open WhatsApp
+            window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
+        }
+        
+        // Handle payment success
+        function handlePaymentSuccess() {
+            otp = generateOTP();
+            
+            // Save order to admin system
+            const adminOrder = saveOrderToAdmin(orderData, otp);
+            
+            // Send WhatsApp message
+            sendWhatsAppMessage(orderData, otp, adminOrder);
+            
+            // Show OTP modal
+            document.getElementById('generated-otp').textContent = otp;
+            document.getElementById('success-modal').classList.remove('hidden');
+            
+            // Save OTP to localStorage for tracking page
+            localStorage.setItem('easygo-otp', otp);
+            localStorage.setItem('easygo-order-id', adminOrder.orderId);
+            
+            // Clear cart (but keep for 1 week in case of payment failure)
+            localStorage.setItem('easygo-pending-order', JSON.stringify(orderData));
+            
+            // Auto redirect after 5 seconds
+            setTimeout(() => {
+                if (document.getElementById('success-modal').classList.contains('hidden') === false) {
+                    window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
+                }
+            }, 5000);
+        }
+        
+        // Event Listeners
+        document.getElementById('payment-success').addEventListener('click', handlePaymentSuccess);
+        
+        document.getElementById('payment-failed').addEventListener('click', () => {
+            alert('Payment failed. Your cart items have been saved. You can try again later.');
+        });
+        
+        document.getElementById('go-to-tracking').addEventListener('click', () => {
+            // Clear pending order data
+            localStorage.removeItem('easygo-pending-order');
+            
+            // Redirect to tracking
+            window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
+        });
+        
+        // Close modal on outside click
+        document.getElementById('success-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'success-modal') {
+                e.target.classList.add('hidden');
+            }
+        });
+        
+        // Initialize
+        window.addEventListener('DOMContentLoaded', loadOrderData);
+    </script>
+</body>
+</html>
