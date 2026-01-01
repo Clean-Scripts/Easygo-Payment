@@ -263,6 +263,7 @@
             </div>
         </div>
     </footer>
+
 <script>
     // CONFIG
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
@@ -328,12 +329,31 @@
             // Update UI
             document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
             document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
+            
+            if (delivery.mode === 'delivery') {
+                document.getElementById('delivery-row').classList.remove('hidden');
+                document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
+                document.getElementById('gst-delivery').textContent = `₹${gstDelivery.toFixed(2)}`;
+            }
+            
             document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
             document.getElementById('payment-amount').textContent = `₹${finalAmount.toFixed(2)}`;
             document.getElementById('pay-amount').textContent = finalAmount.toFixed(2);
             
-            // Store order data
-            orderData = { cart, address, delivery, amount: finalAmount };
+            // Store order data with all totals
+            orderData = { 
+                cart, 
+                address, 
+                delivery, 
+                amount: finalAmount,
+                totals: {
+                    foodTotal: foodTotal,
+                    gstFood: gstFood,
+                    deliveryCharge: deliveryCharge,
+                    gstDelivery: gstDelivery,
+                    deliveryMode: delivery.mode || 'takeaway'
+                }
+            };
             
             console.log("Order loaded:", orderData);
             
@@ -393,7 +413,7 @@
         // Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Save order
+        // Save order with all totals
         const order = {
             id: "EG" + Date.now().toString().slice(-6),
             paymentId: paymentId,
@@ -402,6 +422,10 @@
             customer: orderData.address.name,
             phone: orderData.address.phone,
             items: orderData.cart,
+            deliveryMode: orderData.totals.deliveryMode || 'takeaway',
+            totals: orderData.totals,
+            address: orderData.address,
+            delivery: orderData.delivery,
             timestamp: new Date().toISOString()
         };
         
@@ -412,6 +436,7 @@
         // Save for tracking
         localStorage.setItem('easygo-otp', otp);
         localStorage.setItem('easygo-order-id', order.id);
+        localStorage.setItem('easygo-delivery-mode', orderData.totals.deliveryMode || 'takeaway');
         
         // Clear cart
         localStorage.removeItem('easygo-cart');
@@ -433,149 +458,118 @@
         }, 5000);
     }
     
-   // SEND WHATSAPP - UPDATED WITH ADDRESS & MAP
-function sendWhatsApp(order, otp) {
-    try {
-        let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
-        message += `*Order ID:* ${order.id}%0A`;
-        message += `*OTP:* ${otp}%0A`;
-        message += `*Amount:* ₹${order.amount}%0A`;
-        message += `*Payment ID:* ${order.paymentId}%0A`;
-        message += `*Status:* PENDING ⚠️%0A%0A`;
-        
-        // Add items
-        message += `*Items:*%0A`;
-        order.items.forEach(item => {
-            message += `• ${item.name} × ${item.quantity} - ₹${item.total}%0A`;
-        });
-        
-        message += `%0A*Totals:*%0A`;
-        message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || order.amount}%0A`;
-        
-        if (order.totals?.discount > 0) {
-            message += `Discount: -₹${order.totals.discount.toFixed(2)}%0A`;
-        }
-        
-        if (order.totals?.gstFood > 0) {
-            message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
-        }
-        
-        if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
-            message += `Delivery: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
-            message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
-        }
-        
-        message += `*TOTAL: ₹${order.amount}*%0A%0A`;
-        
-        // Customer details
-        message += `*Customer Details:*%0A`;
-        message += `Name: ${order.customer || order.address?.name || 'N/A'}%0A`;
-        message += `Phone: ${order.phone || order.address?.phone || 'N/A'}%0A%0A`;
-        
-        // Delivery/Takeaway info
-        const deliveryMode = order.deliveryMode || order.delivery?.mode || 'takeaway';
-        
-        if (deliveryMode === 'delivery') {
-            message += `*📍 Delivery Address:*%0A`;
+    // SEND WHATSAPP - UPDATED
+    function sendWhatsApp(order, otp) {
+        try {
+            let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
+            message += `*Order ID:* ${order.id}%0A`;
+            message += `*OTP:* ${otp}%0A`;
+            message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
+            message += `*Payment ID:* ${order.paymentId}%0A`;
+            message += `*Status:* PENDING ⚠️%0A%0A`;
             
-            // Check for proper address structure
-            if (order.address?.houseNumber || order.address?.locality) {
-                message += `${order.address.houseNumber || ''}, ${order.address.locality || ''}%0A`;
-                message += `${order.address.street || ''}%0A`;
-                message += `${order.address.city || ''}, ${order.address.state || ''} - ${order.address.pincode || ''}%0A`;
+            // Add items
+            message += `*Items:*%0A`;
+            order.items.forEach(item => {
+                message += `• ${item.name} × ${item.quantity} - ₹${item.total}%0A`;
+            });
+            
+            message += `%0A*Totals:*%0A`;
+            message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
+            
+            if (order.totals?.gstFood > 0) {
+                message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
+            }
+            
+            const deliveryMode = order.deliveryMode || 'takeaway';
+            if (deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
+                message += `Delivery: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
+                if (order.totals?.gstDelivery > 0) {
+                    message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
+                }
+            }
+            
+            message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
+            
+            // Customer details
+            message += `*Customer Details:*%0A`;
+            message += `Name: ${order.customer || 'N/A'}%0A`;
+            message += `Phone: ${order.phone || 'N/A'}%0A%0A`;
+            
+            if (deliveryMode === 'delivery') {
+                message += `*📍 Delivery Address:*%0A`;
+                if (order.address?.houseNumber || order.address?.locality) {
+                    message += `${order.address.houseNumber || ''}, ${order.address.locality || ''}%0A`;
+                    message += `${order.address.street || ''}%0A`;
+                    message += `${order.address.city || 'Indore'}, ${order.address.state || 'MP'} - ${order.address.pincode || ''}%0A`;
+                }
+                
+                if (order.address?.specialRequest) {
+                    message += `%0A*Special Request:* ${order.address.specialRequest}%0A`;
+                }
             } else {
-                // Fallback to delivery data
-                message += `${order.delivery?.address || 'Address not provided'}%0A`;
+                message += `*🏪 Takeaway Pickup:*%0A`;
+                message += `Prime Square, Omaxe City 1, Indore%0A`;
+                message += `Timings: 6:00 PM - 10:00 PM%0A`;
+                message += `Customer will pickup order%0A`;
             }
             
-            if (order.address?.specialRequest) {
-                message += `%0A*Special Request:* ${order.address.specialRequest}%0A`;
-            }
+            console.log("WhatsApp message prepared:", message);
+            window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
             
-            // Google Maps location link
-            if (order.delivery?.locationLink) {
-                message += `%0A📍 *Location Link:* ${order.delivery.locationLink}`;
-            } else if (order.address?.city && order.address?.locality) {
-                // Generate Google Maps link from address
-                const addressQuery = encodeURIComponent(
-                    `${order.address.houseNumber || ''} ${order.address.locality || ''} ${order.address.city || ''} ${order.address.pincode || ''}`
-                );
-                message += `%0A📍 *Location:* https://www.google.com/maps/search/?api=1&query=${addressQuery}`;
-            }
-            
-        } else {
-            message += `*🏪 Takeaway Pickup:*%0A`;
-            message += `Prime Square, Omaxe City 1, Indore%0A`;
-            message += `Timings: 6:00 PM - 10:00 PM%0A`;
-            message += `Customer will pickup order%0A`;
-        }
-        
-        // Open WhatsApp
-        console.log("WhatsApp message prepared:", message);
-        window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
-        
-        // ALSO SEND TO DELIVERY SYSTEM
-        if (deliveryMode === 'delivery') {
+            // Save to delivery system
             saveToDeliverySystem(order, otp);
+            
+        } catch (error) {
+            console.error("Error sending WhatsApp:", error);
+            const fallbackMsg = `New Order! OTP: ${otp}, Amount: ₹${order.amount}, Phone: ${order.phone}`;
+            window.open(`https://wa.me/917651837322?text=${fallbackMsg}`, '_blank');
         }
-        
-    } catch (error) {
-        console.error("Error sending WhatsApp:", error);
-        // Fallback simple message
-        const fallbackMsg = `New Order! OTP: ${otp}, Amount: ₹${order.amount}, Phone: ${order.phone}`;
-        window.open(`https://wa.me/917651837322?text=${fallbackMsg}`, '_blank');
     }
-}
-
-// SAVE ORDER TO DELIVERY SYSTEM
-function saveToDeliverySystem(order, otp) {
-    try {
-        // Load existing orders
-        let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
-        let allOrders = JSON.parse(localStorage.getItem('easygo-all-orders')) || [];
-        
-        // Create delivery order object
-        const deliveryOrder = {
-            orderId: order.id,
-            razorpayPaymentId: order.paymentId,
-            customerName: order.customer || order.address?.name || 'Customer',
-            customerPhone: order.phone || order.address?.phone || '',
-            totalAmount: order.amount,
-            items: order.items.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: parseFloat(item.total) || 0,
-                pack: item.pack || 'standard'
-            })),
-            address: order.deliveryMode === 'delivery' ? 
-                `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
-                "Takeaway - Prime Square, Omaxe City 1, Indore",
-            locationLink: order.delivery?.locationLink || "",
-            deliveryMode: order.deliveryMode || 'takeaway',
-            status: 'ready-for-pickup',
-            timestamp: new Date().toISOString(),
-            paymentMethod: 'razorpay',
-            paymentId: order.paymentId,
-            otp: otp,
-            pickedUpAt: null,
-            deliveredAt: null,
-            deliveryPartner: null
-        };
-        
-        // Add to active orders (for delivery dashboard)
-        activeOrders.push(deliveryOrder);
-        localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
-        
-        // Add to all orders history
-        allOrders.push(deliveryOrder);
-        localStorage.setItem('easygo-all-orders', JSON.stringify(allOrders));
-        
-        console.log("Order saved to delivery system:", deliveryOrder);
-        
-    } catch (error) {
-        console.error("Error saving to delivery system:", error);
+    
+    // SAVE ORDER TO DELIVERY SYSTEM
+    function saveToDeliverySystem(order, otp) {
+        try {
+            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
+            let allOrders = JSON.parse(localStorage.getItem('easygo-all-orders')) || [];
+            
+            const deliveryOrder = {
+                orderId: order.id,
+                razorpayPaymentId: order.paymentId,
+                customerName: order.customer || order.address?.name || 'Customer',
+                customerPhone: order.phone || order.address?.phone || '',
+                totalAmount: order.amount,
+                items: order.items.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: parseFloat(item.total) || 0,
+                    pack: item.pack || 'standard'
+                })),
+                address: order.deliveryMode === 'delivery' ? 
+                    `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
+                    "Takeaway - Prime Square, Omaxe City 1, Indore",
+                deliveryMode: order.deliveryMode || 'takeaway',
+                status: 'order-received',
+                timestamp: new Date().toISOString(),
+                paymentMethod: 'razorpay',
+                paymentId: order.paymentId,
+                otp: otp,
+                deliveryPartner: "EasyGo-Rider",
+                deliveryPartnerPhone: "+91 76518 37322"
+            };
+            
+            activeOrders.push(deliveryOrder);
+            localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
+            
+            allOrders.push(deliveryOrder);
+            localStorage.setItem('easygo-all-orders', JSON.stringify(allOrders));
+            
+            console.log("Order saved to delivery system:", deliveryOrder);
+            
+        } catch (error) {
+            console.error("Error saving to delivery system:", error);
+        }
     }
-}
     
     // EVENT LISTENERS
     document.addEventListener('DOMContentLoaded', function() {
@@ -590,7 +584,6 @@ function saveToDeliverySystem(order, otp) {
         document.getElementById('retry-payment').addEventListener('click', initiateRazorpayPayment);
     });
 </script>
-
     
-    </body>
+</body>
 </html>
