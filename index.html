@@ -21,6 +21,18 @@
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #10b981;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="antialiased bg-gray-50">
@@ -95,7 +107,7 @@
                 <div class="bg-blue-50 border border-blue-200 rounded-3xl p-8">
                     <h3 class="font-bold text-blue-800 mb-4">💳 Payment Instructions</h3>
                     <ul class="space-y-2 text-blue-700">
-                        <li>✅ Amount is auto-calculated and cannot be edited</li>
+                        <li>✅ Amount is auto-calculated from your cart</li>
                         <li>✅ Multiple payment options available via Razorpay</li>
                         <li>✅ Instant payment confirmation</li>
                         <li>✅ OTP will be generated after payment</li>
@@ -108,7 +120,7 @@
             <!-- Payment Section -->
             <div>
                 <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
-                    <h2 class="text-2xl font-bold mb-6">💰 Payment Bifurcation</h2>
+                    <h2 class="text-2xl font-bold mb-6">💰 Payment Breakdown</h2>
                     
                     <div class="space-y-4 mb-6">
                         <div class="flex justify-between">
@@ -215,12 +227,9 @@
     <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
             <div class="text-center">
-                <div class="text-6xl mb-6 animate-pulse">⏳</div>
+                <div class="loader mx-auto mb-6"></div>
                 <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
                 <p class="text-gray-600 mb-6">Please wait while we connect to Razorpay...</p>
-                <div class="w-full bg-gray-200 rounded-full h-2.5">
-                    <div class="bg-blue-600 h-2.5 rounded-full animate-pulse w-3/4"></div>
-                </div>
             </div>
         </div>
     </div>
@@ -245,7 +254,7 @@
                         © 2024 Easy Go + All Rights Reserved
                     </p>
                     <p class="text-gray-500 text-xs">
-                        MORE | PISA | ICRT Registered - Serving daily from 5:00 PM to 10:00 PM
+                        Serving daily from 5:00 PM to 10:00 PM
                     </p>
                     <div class="mt-4">
                         <a href="#" class="text-gray-400 hover:text-white text-sm mr-4">View Menu</a>
@@ -261,9 +270,8 @@
         // ============================
         // CONFIGURATION
         // ============================
-        // Use test key for development
-        // For production, replace with your live key
-        const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV"; // Test key - replace with your live key
+        // RAZORPAY TEST KEY - Replace with your LIVE key for production
+        const RAZORPAY_KEY_ID = "rzp_test_wP2Yq2FjZ8TRuH"; // TEST KEY - REPLACE WITH YOUR LIVE KEY
 
         // ============================
         // GLOBAL VARIABLES
@@ -272,6 +280,7 @@
         let finalAmount = 0;
         let otp = '';
         let paymentProcessing = false;
+        let cartItems = [];
 
         // ============================
         // ERROR HANDLING
@@ -281,7 +290,6 @@
             document.getElementById('error-message').style.display = 'block';
             document.getElementById('retry-payment').classList.remove('hidden');
             
-            // Auto hide after 8 seconds
             setTimeout(() => {
                 hideError();
             }, 8000);
@@ -304,14 +312,17 @@
         }
 
         // ============================
-        // INITIALIZATION
+        // INITIALIZATION & DATA LOADING
         // ============================
         function loadOrderData() {
+            console.log("=== LOADING ORDER DATA ===");
+            
             try {
-                // Load cart
-                const cart = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+                // Load cart from localStorage (from menu page)
+                cartItems = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+                console.log("Cart items from localStorage:", cartItems);
                 
-                if (cart.length === 0) {
+                if (cartItems.length === 0) {
                     showError("Your cart is empty. Please add items first.");
                     setTimeout(() => {
                         window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
@@ -319,25 +330,37 @@
                     return;
                 }
                 
-                // Load address and delivery data
+                // Load address and delivery data (from address page)
                 const address = JSON.parse(localStorage.getItem('easygo-address')) || {};
                 const delivery = JSON.parse(localStorage.getItem('easygo-delivery')) || {};
                 const coupon = JSON.parse(localStorage.getItem('easygo-coupon')) || null;
                 
-                // Validate address for delivery
-                if (delivery.mode === 'delivery' && (!address.phone || !address.houseNumber)) {
-                    showError("Please complete address details first.");
-                    setTimeout(() => {
-                        window.location.href = 'https://clean-scripts.github.io/Easygo-Address/';
-                    }, 2000);
-                    return;
+                console.log("Address data:", address);
+                console.log("Delivery data:", delivery);
+                
+                // Calculate food total from cart items
+                let foodTotal = 0;
+                cartItems.forEach(item => {
+                    // Convert item.total to number safely
+                    const itemPrice = parseFloat(item.total) || 0;
+                    foodTotal += itemPrice;
+                    console.log(`Item: ${item.name}, Price: ${itemPrice}, Running Total: ${foodTotal}`);
+                });
+                
+                console.log("Final food total:", foodTotal);
+                
+                // Check if we have the cart total from address page
+                const addressPageFoodTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
+                if (addressPageFoodTotal > 0 && Math.abs(foodTotal - addressPageFoodTotal) > 0.01) {
+                    console.warn(`Food total mismatch: Calculated=${foodTotal}, From address page=${addressPageFoodTotal}`);
+                    // Use the address page total for consistency
+                    foodTotal = addressPageFoodTotal;
                 }
                 
-                // Calculate totals
-                let foodTotal = parseFloat(localStorage.getItem('easygo-cart-total')) || 0;
                 let discount = 0;
                 
                 if (coupon) {
+                    console.log("Coupon applied:", coupon);
                     if (coupon.type === 'percent') {
                         discount = foodTotal * (coupon.discount / 100);
                     } else {
@@ -349,28 +372,41 @@
                 }
                 
                 const foodAfterDiscount = foodTotal - discount;
-                const gstFood = foodAfterDiscount * 0.05;
+                const gstFood = foodAfterDiscount * 0.05; // 5% GST on food
                 
                 let deliveryCharge = 0;
                 let gstDelivery = 0;
                 
+                console.log("Delivery mode:", delivery.mode);
+                
                 if (delivery.mode === 'delivery') {
-                    deliveryCharge = parseFloat(delivery.charge) || 30; // Default delivery charge
-                    gstDelivery = deliveryCharge * 0.18;
+                    // Get delivery charge from address page calculation
+                    deliveryCharge = parseFloat(delivery.charge) || 0;
+                    gstDelivery = deliveryCharge * 0.18; // 18% GST on delivery
                     document.getElementById('delivery-row').classList.remove('hidden');
                     document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
                     document.getElementById('gst-delivery').textContent = `₹${gstDelivery.toFixed(2)}`;
                 }
                 
-                finalAmount = Math.round(foodAfterDiscount + gstFood + deliveryCharge + gstDelivery);
+                finalAmount = Math.round((foodAfterDiscount + gstFood + deliveryCharge + gstDelivery) * 100) / 100;
+                
+                console.log("Final calculation:", {
+                    foodTotal: foodTotal,
+                    discount: discount,
+                    foodAfterDiscount: foodAfterDiscount,
+                    gstFood: gstFood,
+                    deliveryCharge: deliveryCharge,
+                    gstDelivery: gstDelivery,
+                    finalAmount: finalAmount
+                });
                 
                 // Validate amount
-                if (finalAmount <= 0) {
+                if (finalAmount <= 0 || isNaN(finalAmount)) {
                     showError("Invalid order amount. Please check your cart.");
                     return;
                 }
                 
-                // Update UI
+                // Update UI with correct values
                 document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
                 document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
                 document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
@@ -378,14 +414,14 @@
                 document.getElementById('pay-amount').textContent = finalAmount.toFixed(2);
                 
                 // Render items
-                renderOrderItems(cart);
+                renderOrderItems(cartItems);
                 
                 // Render details
                 renderDetails(address, delivery);
                 
                 // Store order data
                 orderData = {
-                    cart: cart,
+                    cart: cartItems,
                     address: address,
                     delivery: delivery,
                     coupon: coupon,
@@ -399,9 +435,11 @@
                     }
                 };
                 
+                console.log("Order data loaded successfully:", orderData);
+                
             } catch (error) {
                 console.error("Error loading order data:", error);
-                showError("Failed to load order details. Please refresh the page.");
+                showError("Failed to load order details: " + error.message);
             }
         }
         
@@ -410,13 +448,14 @@
             let html = '';
             
             cart.forEach(item => {
+                const itemTotal = parseFloat(item.total) || 0;
                 html += `
-                    <div class="flex justify-between items-center">
+                    <div class="flex justify-between items-center border-b pb-4">
                         <div>
                             <p class="font-medium">${item.name}</p>
                             <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
                         </div>
-                        <span class="font-bold">₹${item.total}</span>
+                        <span class="font-bold">₹${itemTotal.toFixed(2)}</span>
                     </div>
                 `;
             });
@@ -480,7 +519,12 @@
         // RAZORPAY INTEGRATION
         // ============================
         function initiateRazorpayPayment() {
-            if (paymentProcessing) return;
+            if (paymentProcessing) {
+                console.log("Payment already processing...");
+                return;
+            }
+            
+            console.log("Initiating Razorpay payment...");
             
             // Validate data
             if (!orderData || !orderData.address || !orderData.address.phone) {
@@ -488,7 +532,7 @@
                 return;
             }
             
-            if (finalAmount <= 0) {
+            if (finalAmount <= 0 || isNaN(finalAmount)) {
                 showError("Invalid order amount. Please check your cart.");
                 return;
             }
@@ -499,19 +543,24 @@
                 // Generate unique order ID for Razorpay
                 const razorpayOrderId = "order_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
                 
+                console.log("Creating Razorpay options:", {
+                    amount: finalAmount * 100,
+                    currency: "INR",
+                    orderId: razorpayOrderId
+                });
+                
                 const options = {
                     key: RAZORPAY_KEY_ID,
-                    amount: finalAmount * 100, // Amount in paise
+                    amount: Math.round(finalAmount * 100), // Amount in paise (must be integer)
                     currency: "INR",
                     name: "Easy Go Food Delivery",
-                    description: "Order Payment",
-                    order_id: razorpayOrderId, // This will be overridden if you have backend
+                    description: `Order Payment - ${delivery.mode === 'delivery' ? 'Home Delivery' : 'Takeaway'}`,
                     
                     // Customer details
                     prefill: {
                         name: orderData.address.name || "Customer",
                         contact: orderData.address.phone || "",
-                        email: orderData.address.email || "customer@example.com"
+                        email: orderData.address.email || "customer@easygo.com"
                     },
                     
                     // Theme
@@ -521,43 +570,59 @@
                     
                     // Callback functions
                     handler: function(response) {
+                        console.log("Payment successful response:", response);
                         hideLoading();
-                        console.log("Payment successful:", response);
-                        handlePaymentSuccess(response.razorpay_payment_id, "razorpay", response.razorpay_order_id);
+                        handlePaymentSuccess(
+                            response.razorpay_payment_id, 
+                            "razorpay", 
+                            response.razorpay_order_id,
+                            response.razorpay_signature
+                        );
                     },
                     
                     modal: {
                         ondismiss: function() {
-                            hideLoading();
                             console.log("Payment modal closed by user");
+                            hideLoading();
                         }
                     },
                     
                     "notes": {
                         "order_type": orderData.delivery.mode,
                         "customer_name": orderData.address.name,
-                        "customer_phone": orderData.address.phone
+                        "customer_phone": orderData.address.phone,
+                        "total_amount": finalAmount
                     }
                 };
                 
                 // Create and open Razorpay instance
                 const rzp = new Razorpay(options);
                 
-                // Handle errors
+                // Handle payment errors
                 rzp.on('payment.failed', function(response) {
-                    hideLoading();
                     console.error("Payment failed:", response.error);
-                    showError("Payment failed: " + (response.error.description || "Unknown error"));
+                    hideLoading();
+                    
+                    let errorMsg = "Payment failed: ";
+                    if (response.error && response.error.description) {
+                        errorMsg += response.error.description;
+                    } else if (response.error && response.error.reason) {
+                        errorMsg += response.error.reason;
+                    } else {
+                        errorMsg += "Transaction declined";
+                    }
+                    showError(errorMsg);
                 });
                 
-                // Open payment modal with delay to ensure loading shows
+                // Open payment modal
                 setTimeout(() => {
                     rzp.open();
-                }, 500);
+                    console.log("Razorpay modal opened");
+                }, 300);
                 
             } catch (error) {
-                hideLoading();
                 console.error("Razorpay initialization error:", error);
+                hideLoading();
                 showError("Failed to initialize payment. Please try again.");
             }
         }
@@ -565,7 +630,7 @@
         // ============================
         // ORDER MANAGEMENT
         // ============================
-        function saveOrderToAdmin(orderData, otp, paymentMethod, paymentId = null, razorpayOrderId = null) {
+        function saveOrderToAdmin(orderData, otp, paymentMethod, paymentId = null, razorpayOrderId = null, signature = null) {
             try {
                 // Get active orders
                 let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
@@ -574,18 +639,20 @@
                 const adminOrder = {
                     orderId: "EG" + Date.now().toString().slice(-8),
                     razorpayOrderId: razorpayOrderId,
+                    razorpayPaymentId: paymentId,
+                    razorpaySignature: signature,
                     customerName: orderData.address.name,
                     customerPhone: orderData.address.phone,
                     totalAmount: orderData.totals.finalAmount,
                     items: orderData.cart.map(item => ({
                         name: item.name,
                         quantity: item.quantity,
-                        price: item.total,
+                        price: parseFloat(item.total) || 0,
                         pack: item.pack
                     })),
                     address: orderData.delivery.mode === 'delivery' ? 
-                        `${orderData.address.houseNumber}, ${orderData.address.locality}, ${orderData.address.city}` : 
-                        "Takeaway - Prime Square, Indore",
+                        `${orderData.address.houseNumber || ''}, ${orderData.address.locality || ''}, ${orderData.address.city || 'Indore'}` : 
+                        "Takeaway - Prime Square, Omaxe City 1, Indore",
                     locationLink: orderData.delivery.locationLink || "",
                     deliveryMode: orderData.delivery.mode,
                     status: 'pending',
@@ -604,6 +671,7 @@
                 allOrders.push(adminOrder);
                 localStorage.setItem('easygo-all-orders', JSON.stringify(allOrders));
                 
+                console.log("Order saved to admin:", adminOrder);
                 return adminOrder;
                 
             } catch (error) {
@@ -631,10 +699,10 @@
                 if (orderData.totals.discount > 0) {
                     message += `Discount: -₹${orderData.totals.discount.toFixed(2)}%0A`;
                 }
-                message += `GST on Food: ₹${orderData.totals.gstFood.toFixed(2)}%0A`;
+                message += `GST on Food (5%): ₹${orderData.totals.gstFood.toFixed(2)}%0A`;
                 if (orderData.delivery.mode === 'delivery') {
                     message += `Delivery: ₹${orderData.totals.deliveryCharge.toFixed(2)}%0A`;
-                    message += `GST on Delivery: ₹${orderData.totals.gstDelivery.toFixed(2)}%0A`;
+                    message += `GST on Delivery (18%): ₹${orderData.totals.gstDelivery.toFixed(2)}%0A`;
                 }
                 message += `*TOTAL: ₹${orderData.totals.finalAmount.toFixed(2)}*%0A%0A`;
                 
@@ -646,9 +714,9 @@
                 // Delivery/Takeaway info
                 if (orderData.delivery.mode === 'delivery') {
                     message += `*Delivery Address:*%0A`;
-                    message += `${orderData.address.houseNumber}, ${orderData.address.locality}%0A`;
-                    message += `${orderData.address.street}%0A`;
-                    message += `${orderData.address.city}, ${orderData.address.state} - ${orderData.address.pincode}%0A`;
+                    message += `${orderData.address.houseNumber || ''}, ${orderData.address.locality || ''}%0A`;
+                    message += `${orderData.address.street || ''}%0A`;
+                    message += `${orderData.address.city || ''}, ${orderData.address.state || ''} - ${orderData.address.pincode || ''}%0A`;
                     
                     if (orderData.address.specialRequest) {
                         message += `%0A*Special Request:* ${orderData.address.specialRequest}%0A`;
@@ -666,6 +734,7 @@
                 
                 // Open WhatsApp
                 window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
+                console.log("WhatsApp message sent");
                 
             } catch (error) {
                 console.error("Error sending WhatsApp message:", error);
@@ -675,12 +744,13 @@
         // ============================
         // PAYMENT HANDLERS
         // ============================
-        function handlePaymentSuccess(paymentId = null, paymentMethod = "razorpay", razorpayOrderId = null) {
+        function handlePaymentSuccess(paymentId = null, paymentMethod = "razorpay", razorpayOrderId = null, signature = null) {
             try {
                 otp = generateOTP();
+                console.log("Payment success, generating OTP:", otp);
                 
                 // Save order to admin system
-                const adminOrder = saveOrderToAdmin(orderData, otp, paymentMethod, paymentId, razorpayOrderId);
+                const adminOrder = saveOrderToAdmin(orderData, otp, paymentMethod, paymentId, razorpayOrderId, signature);
                 
                 // Send WhatsApp message
                 sendWhatsAppMessage(orderData, otp, adminOrder, paymentMethod);
@@ -693,11 +763,13 @@
                 localStorage.setItem('easygo-otp', otp);
                 localStorage.setItem('easygo-order-id', adminOrder.orderId);
                 
-                // Clear cart data
+                // Clear cart data (but keep for 1 hour in case of issues)
                 localStorage.removeItem('easygo-cart');
                 localStorage.removeItem('easygo-cart-total');
                 localStorage.removeItem('easygo-coupon');
                 localStorage.removeItem('easygo-delivery');
+                
+                console.log("Order completed successfully");
                 
                 // Auto redirect after 5 seconds
                 setTimeout(() => {
@@ -751,6 +823,16 @@
                 initiateRazorpayPayment();
             }
         });
+        
+        // Log for debugging
+        console.log("Payment page loaded successfully");
+        
+        // Debug helper - check localStorage
+        console.log("=== DEBUG LOCALSTORAGE ===");
+        console.log("easygo-cart:", JSON.parse(localStorage.getItem('easygo-cart') || '[]'));
+        console.log("easygo-cart-items-total:", localStorage.getItem('easygo-cart-items-total'));
+        console.log("easygo-address:", JSON.parse(localStorage.getItem('easygo-address') || '{}'));
+        console.log("easygo-delivery:", JSON.parse(localStorage.getItem('easygo-delivery') || '{}'));
     </script>
 </body>
 </html>
