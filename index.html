@@ -89,14 +89,14 @@
                     </div>
                     
                     <div class="border-t pt-6">
-                        <h3 class="font-bold mb-4">📝 Customer Details</h3>
+                        <h3 class="font-bold mb-4">👤 Customer Details</h3>
                         <div id="customer-details" class="space-y-2">
                             <!-- Details loaded from localStorage -->
                         </div>
                     </div>
                     
                     <div class="border-t pt-6">
-                        <h3 class="font-bold mb-4">📍 Delivery Address</h3>
+                        <h3 class="font-bold mb-4">📍 Order Details</h3>
                         <div id="delivery-address" class="space-y-2">
                             <!-- Address loaded from localStorage -->
                         </div>
@@ -105,12 +105,28 @@
                 
                 <!-- Payment Instructions -->
                 <div class="bg-blue-50 border border-blue-200 rounded-3xl p-8">
-                    <h3 class="font-bold text-blue-800 mb-4">💳 Payment Instructions</h3>
-                    <ul class="space-y-2 text-blue-700">
-                        <li>✅ Amount is auto-calculated from your cart</li>
-                        <li>✅ Multiple payment options available via Razorpay</li>
-                        <li>✅ Instant payment confirmation</li>
-                        <li>✅ OTP will be generated after payment</li>
+                    <h3 class="font-bold text-blue-800 mb-4">💡 Important Notes</h3>
+                    <ul class="space-y-3 text-blue-700">
+                        <li class="flex items-start">
+                            <span class="text-xl mr-2">✅</span>
+                            <span>Amount is calculated automatically from your cart items</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-xl mr-2">✅</span>
+                            <span>Secure payment via Razorpay - accepts all major payment methods</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-xl mr-2">✅</span>
+                            <span>Instant payment confirmation & order processing</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-xl mr-2">✅</span>
+                            <span>OTP will be generated after successful payment for order verification</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-xl mr-2">✅</span>
+                            <span>Order tracking available immediately after payment</span>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -118,77 +134,97 @@
             <!-- Payment Section -->
             <div>
                 <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
-                    <h2 class="text-2xl font-bold mb-6">💰 Payment Breakdown</h2>
+                    <h2 class="text-2xl font-bold mb-6">💰 Payment Summary</h2>
                     
                     <div class="space-y-4 mb-6">
-                        <div class="flex justify-between">
-                            <span>Food Items Total</span>
-                            <span id="food-total">₹0</span>
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-700">Food Items Total</span>
+                            <span id="food-total" class="font-semibold">₹0</span>
                         </div>
                         
-                        <div id="coupon-row" class="flex justify-between text-green-600 hidden">
+                        <div id="coupon-row" class="flex justify-between text-green-600 py-2 hidden">
                             <span>Coupon Discount</span>
-                            <span id="coupon-discount">-₹0</span>
+                            <span id="coupon-discount" class="font-semibold">-₹0</span>
                         </div>
                         
-                        <div class="flex justify-between">
-                            <span>GST on Food (5%)</span>
-                            <span id="gst-food">₹0</span>
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-700">GST on Food (5%)</span>
+                            <span id="gst-food" class="font-semibold">₹0</span>
                         </div>
                         
-                        <div id="delivery-row" class="hidden">
-                            <div class="flex justify-between">
-                                <span>Delivery Charge</span>
-                                <span id="delivery-charge">₹0</span>
+                        <div id="delivery-row" class="border-t pt-4 mt-2 hidden">
+                            <div class="flex justify-between py-2">
+                                <span class="text-gray-700">Delivery Charge</span>
+                                <span id="delivery-charge" class="font-semibold">₹0</span>
                             </div>
-                            <div class="flex justify-between">
-                                <span>GST on Delivery (18%)</span>
-                                <span id="gst-delivery">₹0</span>
+                            <div class="flex justify-between py-2">
+                                <span class="text-gray-700">GST on Delivery (18%)</span>
+                                <span id="gst-delivery" class="font-semibold">₹0</span>
                             </div>
                         </div>
                         
-                        <div class="border-t pt-4">
-                            <div class="flex justify-between text-xl font-bold">
-                                <span>Total Amount</span>
-                                <span id="final-total">₹0</span>
+                        <div class="border-t-2 border-gray-300 pt-4 mt-2">
+                            <div class="flex justify-between text-xl font-bold py-2">
+                                <span class="text-gray-800">Total Amount Payable</span>
+                                <span id="final-total" class="text-green-600">₹0</span>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div class="mt-6 pt-6 border-t">
+                        <p class="text-sm text-gray-600">
+                            <span class="font-medium">Note:</span> All prices include applicable taxes. Payment breakdown is shown for transparency.
+                        </p>
                     </div>
                 </div>
                 
                 <!-- Payment Options -->
                 <div class="bg-white rounded-3xl shadow-lg p-8">
-                    <h2 class="text-2xl font-bold mb-6">💳 Secure Payment</h2>
+                    <div class="text-center mb-8">
+                        <div class="inline-block bg-green-50 text-green-700 px-6 py-3 rounded-2xl mb-4">
+                            <span class="font-bold text-lg" id="payment-amount">₹0</span>
+                            <span class="text-gray-600 ml-2">to pay</span>
+                        </div>
+                        <p class="text-gray-600">Secure & hassle-free payment</p>
+                    </div>
                     
-                    <div class="space-y-4 mb-6">
+                    <h2 class="text-2xl font-bold mb-6">💳 Payment Method</h2>
+                    
+                    <div class="space-y-4 mb-8">
                         <button id="razorpay-pay-btn" 
-                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl">
                             <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
                                 <path d="M2.5 12.406h19v9h-19z"/>
                             </svg>
-                            Pay with Razorpay - ₹<span id="pay-amount">0</span>
+                            Pay Now - ₹<span id="pay-amount">0</span>
                         </button>
                         
-                        <div class="text-center text-sm text-gray-500 mb-4">
-                            Powered by Razorpay - Accepts Cards, UPI, NetBanking & Wallets
+                        <div class="text-center">
+                            <div class="inline-flex items-center justify-center space-x-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-full">
+                                <span>🔒 Secure</span>
+                                <span>•</span>
+                                <span>💳 Cards</span>
+                                <span>•</span>
+                                <span>📱 UPI</span>
+                                <span>•</span>
+                                <span>🏦 NetBanking</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Powered by Razorpay</p>
                         </div>
                     </div>
                     
-                    <div class="text-center mb-6">
-                        <p class="text-3xl font-bold text-blue-600 mb-2" id="payment-amount">₹0</p>
-                        <p class="text-gray-600 text-sm">Final amount payable</p>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div class="flex justify-between">
+                    <div class="space-y-4 pt-6 border-t">
+                        <div class="flex justify-between items-center">
                             <a href="https://clean-scripts.github.io/Easygo-Address/" 
-                               class="text-gray-600 hover:text-gray-900">
-                                ← Back to Address
+                               class="text-gray-600 hover:text-gray-900 flex items-center">
+                                <span class="text-xl mr-2">←</span>
+                                <span>Back to Address</span>
                             </a>
                             <button id="retry-payment" 
-                                    class="text-blue-600 hover:text-blue-800 hidden">
-                                Retry Payment
+                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center">
+                                <span class="mr-2">🔄</span>
+                                <span>Retry Payment</span>
                             </button>
                         </div>
                     </div>
@@ -203,19 +239,20 @@
             <div class="text-center">
                 <div class="text-6xl mb-6">🎉</div>
                 <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
-                <p class="text-gray-600 mb-6">Order details sent to EasyGo. Your OTP is:</p>
+                <p class="text-gray-600 mb-6">Your order has been confirmed. Please save this OTP:</p>
                 
                 <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl" id="generated-otp">
                     123456
                 </div>
                 
                 <p class="text-sm text-gray-500 mb-6">
-                    Share this OTP with delivery partner. Redirecting to tracking...
+                    Share this OTP with delivery partner for verification.
+                    <br>Redirecting to tracking page...
                 </p>
                 
                 <button id="go-to-tracking" 
-                        class="w-full py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors">
-                    Track Your Order →
+                        class="w-full py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors shadow-lg hover:shadow-xl">
+                    Track Your Order Now →
                 </button>
             </div>
         </div>
@@ -228,6 +265,7 @@
                 <div class="loader mx-auto mb-6"></div>
                 <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
                 <p class="text-gray-600 mb-6">Please wait while we connect to Razorpay...</p>
+                <p class="text-sm text-gray-500">Do not close this window</p>
             </div>
         </div>
     </div>
@@ -374,7 +412,7 @@
         }
     }
     
-    // DISPLAY CART ITEMS ON PAGE - FIXED WITH COST
+    // DISPLAY CART ITEMS ON PAGE - CLEAN VERSION WITHOUT PRICE
     function displayCartItems(cart) {
         const orderItems = document.getElementById('order-items');
         orderItems.innerHTML = '';
@@ -386,25 +424,21 @@
         
         cart.forEach(item => {
             const itemDiv = document.createElement('div');
-            itemDiv.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-xl';
+            itemDiv.className = 'flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100';
             
-            // Calculate price per item
             const quantity = parseInt(item.quantity) || 1;
-            const totalPrice = parseFloat(item.total) || 0;
-            const pricePerItem = totalPrice / quantity;
             
             itemDiv.innerHTML = `
                 <div class="flex-1">
-                    <p class="font-medium text-gray-800">${item.name || 'Unknown Item'}</p>
-                    <div class="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                        <span>Qty: ${quantity}</span>
-                        <span>Pack: ${item.pack || 'Standard'}</span>
-                        <span>Price: ₹${pricePerItem.toFixed(2)} each</span>
+                    <p class="font-semibold text-gray-800 text-lg">${item.name || 'Food Item'}</p>
+                    <div class="flex items-center gap-4 mt-2">
+                        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">Qty: ${quantity}</span>
+                        <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">Pack: ${item.pack || 'Family'}</span>
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-gray-900">₹${totalPrice.toFixed(2)}</p>
-                    <p class="text-xs text-gray-500">Total for ${quantity} item(s)</p>
+                    <div class="text-xs text-gray-500 mb-1">Order item</div>
+                    <div class="text-sm font-medium text-gray-700">${quantity} item${quantity > 1 ? 's' : ''}</div>
                 </div>
             `;
             orderItems.appendChild(itemDiv);
@@ -413,11 +447,17 @@
         // Add cart summary
         const cartTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
         const summaryDiv = document.createElement('div');
-        summaryDiv.className = 'border-t pt-4 mt-4';
+        summaryDiv.className = 'border-t pt-6 mt-6';
         summaryDiv.innerHTML = `
             <div class="flex justify-between items-center">
-                <span class="font-medium text-gray-700">Cart Subtotal (${cart.length} items)</span>
-                <span class="font-bold text-lg text-gray-900">₹${cartTotal.toFixed(2)}</span>
+                <div>
+                    <span class="font-medium text-gray-700">Order contains</span>
+                    <p class="text-sm text-gray-500">${cart.length} unique item${cart.length > 1 ? 's' : ''}</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs text-gray-500 mb-1">Items value</div>
+                    <span class="font-bold text-lg text-gray-900">₹${cartTotal.toFixed(2)}</span>
+                </div>
             </div>
         `;
         orderItems.appendChild(summaryDiv);
@@ -430,30 +470,64 @@
         
         if (!address || Object.keys(address).length === 0) {
             customerDetails.innerHTML = `
-                <p class="text-red-500">⚠️ Customer details not found</p>
-                <p class="text-sm text-gray-500">Please go back to address page and enter details</p>
+                <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl">
+                    <p class="font-medium">⚠️ Customer details not found</p>
+                    <p class="text-sm mt-1">Please go back to address page and enter details</p>
+                </div>
             `;
             return;
         }
         
-        let detailsHTML = '';
+        let detailsHTML = `
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        `;
         
         if (address.name) {
-            detailsHTML += `<p><span class="text-gray-600">👤 Name:</span> <span class="font-medium">${address.name}</span></p>`;
+            detailsHTML += `
+                <div class="flex items-start">
+                    <span class="text-blue-600 mr-2 text-xl">👤</span>
+                    <div>
+                        <div class="text-sm text-blue-500">Name</div>
+                        <div class="font-semibold text-gray-800">${address.name}</div>
+                    </div>
+                </div>
+            `;
         }
         
         if (address.phone) {
-            detailsHTML += `<p><span class="text-gray-600">📱 Phone:</span> <span class="font-medium">${address.phone}</span></p>`;
+            detailsHTML += `
+                <div class="flex items-start">
+                    <span class="text-blue-600 mr-2 text-xl">📱</span>
+                    <div>
+                        <div class="text-sm text-blue-500">Phone</div>
+                        <div class="font-semibold text-gray-800">${address.phone}</div>
+                    </div>
+                </div>
+            `;
         }
         
         if (address.deliveryMode) {
             const modeText = address.deliveryMode === 'delivery' ? 'Home Delivery' : 'Takeaway';
             const modeIcon = address.deliveryMode === 'delivery' ? '🛵' : '🏪';
-            detailsHTML += `<p><span class="text-gray-600">${modeIcon} Mode:</span> <span class="font-medium">${modeText}</span></p>`;
+            detailsHTML += `
+                <div class="flex items-start md:col-span-2">
+                    <span class="text-blue-600 mr-2 text-xl">${modeIcon}</span>
+                    <div>
+                        <div class="text-sm text-blue-500">Order Type</div>
+                        <div class="font-semibold text-gray-800">${modeText}</div>
+                    </div>
+                </div>
+            `;
         }
         
+        detailsHTML += `
+                </div>
+            </div>
+        `;
+        
         if (detailsHTML === '') {
-            detailsHTML = '<p class="text-gray-500">No customer details available</p>';
+            detailsHTML = '<p class="text-gray-500 text-center p-4">No customer details available</p>';
         }
         
         customerDetails.innerHTML = detailsHTML;
@@ -467,47 +541,114 @@
         const deliveryMode = address.deliveryMode || delivery.mode || 'takeaway';
         
         if (deliveryMode === 'delivery') {
-            let addressHTML = '';
+            let addressHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div class="flex items-center mb-3">
+                        <span class="text-green-600 mr-2 text-xl">📍</span>
+                        <span class="font-semibold text-gray-800">Delivery Address</span>
+                    </div>
+            `;
             
             if (address.houseNumber || address.locality) {
                 // Format address for delivery
-                addressHTML += `<p><span class="text-gray-600">🏠 Address:</span> <span class="font-medium">${address.houseNumber || ''}, ${address.locality || ''}</span></p>`;
+                const addressLine1 = `${address.houseNumber || ''}${address.houseNumber && address.locality ? ', ' : ''}${address.locality || ''}`;
+                const addressLine2 = address.street ? address.street : '';
+                const cityLine = `${address.city || 'Indore'}, ${address.state || 'MP'} - ${address.pincode || ''}`;
                 
-                if (address.street) {
-                    addressHTML += `<p><span class="text-gray-600">📍 Street:</span> <span class="font-medium">${address.street}</span></p>`;
+                if (addressLine1.trim()) {
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Address</div>
+                        <div class="font-medium text-gray-800">${addressLine1}</div>
+                    </div>`;
                 }
                 
-                addressHTML += `<p><span class="text-gray-600">🏙️ City:</span> <span class="font-medium">${address.city || 'Indore'}, ${address.state || 'MP'} - ${address.pincode || ''}</span></p>`;
+                if (addressLine2) {
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Street/Landmark</div>
+                        <div class="font-medium text-gray-800">${addressLine2}</div>
+                    </div>`;
+                }
+                
+                addressHTML += `<div class="mb-2">
+                    <div class="text-sm text-gray-600 mb-1">City & Pincode</div>
+                    <div class="font-medium text-gray-800">${cityLine}</div>
+                </div>`;
                 
                 if (address.addressType) {
-                    addressHTML += `<p><span class="text-gray-600">🏢 Type:</span> <span class="font-medium">${address.addressType}</span></p>`;
-                }
-                
-                if (delivery.locationLink) {
-                    addressHTML += `<p><span class="text-gray-600">🗺️ Map:</span> <a href="${delivery.locationLink}" target="_blank" class="text-blue-600 underline">View Location</a></p>`;
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Address Type</div>
+                        <div class="font-medium text-gray-800">${address.addressType}</div>
+                    </div>`;
                 }
                 
                 if (delivery.distance) {
-                    addressHTML += `<p><span class="text-gray-600">📏 Distance:</span> <span class="font-medium">${delivery.distance} km from restaurant</span></p>`;
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Distance</div>
+                        <div class="font-medium text-gray-800">${delivery.distance} km from restaurant</div>
+                    </div>`;
                 }
                 
-                if (delivery.charge > 0) {
-                    addressHTML += `<p><span class="text-gray-600">💰 Delivery Fee:</span> <span class="font-medium">₹${parseFloat(delivery.charge).toFixed(2)}</span></p>`;
+                if (delivery.locationLink) {
+                    addressHTML += `<div class="mt-4 pt-3 border-t border-green-100">
+                        <a href="${delivery.locationLink}" target="_blank" 
+                           class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium">
+                            <span class="mr-2">🗺️</span>
+                            View on Map
+                        </a>
+                    </div>`;
                 }
             } else {
-                addressHTML = '<p class="text-red-500">⚠️ Delivery address details not complete</p>';
+                addressHTML = `
+                    <div class="text-center py-4">
+                        <p class="text-red-500 font-medium">⚠️ Address details incomplete</p>
+                        <p class="text-sm text-gray-600 mt-1">Please update address details</p>
+                    </div>
+                `;
             }
             
+            addressHTML += `</div>`;
             deliveryAddress.innerHTML = addressHTML;
             
         } else {
             // Takeaway mode
             deliveryAddress.innerHTML = `
-                <p><span class="text-gray-600">🏪 Pickup Location:</span> <span class="font-medium">Prime Square, Omaxe City 1, Indore</span></p>
-                <p><span class="text-gray-600">⏰ Pickup Timings:</span> <span class="font-medium">6:00 PM - 10:00 PM</span></p>
-                <p><span class="text-gray-600">📱 OTP Verification:</span> <span class="font-medium">Required at pickup</span></p>
-                <p><span class="text-gray-600">👤 Pickup Name:</span> <span class="font-medium">${address.name || 'Not specified'}</span></p>
-                <p><span class="text-gray-600">📞 Contact:</span> <span class="font-medium">${address.phone || 'Not specified'}</span></p>
+                <div class="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                    <div class="flex items-center mb-3">
+                        <span class="text-purple-600 mr-2 text-xl">🏪</span>
+                        <span class="font-semibold text-gray-800">Pickup Details</span>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <div class="text-sm text-gray-600 mb-1">Pickup Location</div>
+                            <div class="font-medium text-gray-800">Prime Square, Omaxe City 1, Indore</div>
+                        </div>
+                        
+                        <div>
+                            <div class="text-sm text-gray-600 mb-1">Pickup Timings</div>
+                            <div class="font-medium text-gray-800">6:00 PM - 10:00 PM</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm text-gray-600 mb-1">Pickup Name</div>
+                                <div class="font-medium text-gray-800">${address.name || 'Not specified'}</div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-sm text-gray-600 mb-1">Contact Number</div>
+                                <div class="font-medium text-gray-800">${address.phone || 'Not specified'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 pt-3 border-t border-purple-100">
+                            <div class="flex items-center text-amber-600">
+                                <span class="mr-2">🔐</span>
+                                <span class="font-medium">OTP verification required at pickup</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
         }
     }
