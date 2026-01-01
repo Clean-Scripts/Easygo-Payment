@@ -294,13 +294,15 @@
         document.getElementById('razorpay-pay-btn').disabled = false;
     }
     
-    // LOAD ORDER DATA
+    // LOAD ORDER DATA AND DISPLAY ON PAGE
     function loadOrderData() {
         try {
             // Load data
             const cart = JSON.parse(localStorage.getItem('easygo-cart') || '[]');
             const address = JSON.parse(localStorage.getItem('easygo-address') || '{}');
             const delivery = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
+            
+            console.log("Loaded from localStorage:", { cart, address, delivery });
             
             if (cart.length === 0) {
                 showError("Cart is empty!");
@@ -326,7 +328,16 @@
             
             finalAmount = parseFloat((foodTotal + gstFood + deliveryCharge + gstDelivery).toFixed(2));
             
-            // Update UI
+            // DISPLAY CART ITEMS ON PAGE
+            displayCartItems(cart);
+            
+            // DISPLAY CUSTOMER DETAILS ON PAGE
+            displayCustomerDetails(address);
+            
+            // DISPLAY DELIVERY ADDRESS ON PAGE
+            displayDeliveryAddress(address, delivery);
+            
+            // Update payment breakdown UI
             document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
             document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
             
@@ -355,18 +366,137 @@
                 }
             };
             
-            console.log("Order loaded:", orderData);
+            console.log("Order data stored:", orderData);
             
         } catch (error) {
             console.error("Error:", error);
-            showError("Failed to load order");
+            showError("Failed to load order details");
+        }
+    }
+    
+    // DISPLAY CART ITEMS ON PAGE
+    function displayCartItems(cart) {
+        const orderItems = document.getElementById('order-items');
+        orderItems.innerHTML = '';
+        
+        if (cart.length === 0) {
+            orderItems.innerHTML = '<p class="text-gray-500 text-center py-4">No items in cart</p>';
+            return;
+        }
+        
+        cart.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-xl';
+            itemDiv.innerHTML = `
+                <div class="flex-1">
+                    <p class="font-medium text-gray-800">${item.name || 'Unknown Item'}</p>
+                    <div class="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                        <span>Qty: ${item.quantity || 1}</span>
+                        <span>Pack: ${item.pack || 'Standard'}</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-gray-900">₹${parseFloat(item.total || 0).toFixed(2)}</p>
+                    <p class="text-xs text-gray-500">₹${parseFloat(item.price || 0).toFixed(2)} each</p>
+                </div>
+            `;
+            orderItems.appendChild(itemDiv);
+        });
+    }
+    
+    // DISPLAY CUSTOMER DETAILS ON PAGE
+    function displayCustomerDetails(address) {
+        const customerDetails = document.getElementById('customer-details');
+        customerDetails.innerHTML = '';
+        
+        if (!address || Object.keys(address).length === 0) {
+            customerDetails.innerHTML = `
+                <p class="text-red-500">⚠️ Customer details not found</p>
+                <p class="text-sm text-gray-500">Please go back to address page and enter details</p>
+            `;
+            return;
+        }
+        
+        let detailsHTML = '';
+        
+        if (address.name) {
+            detailsHTML += `<p><span class="text-gray-600">👤 Name:</span> <span class="font-medium">${address.name}</span></p>`;
+        }
+        
+        if (address.phone) {
+            detailsHTML += `<p><span class="text-gray-600">📱 Phone:</span> <span class="font-medium">${address.phone}</span></p>`;
+        }
+        
+        if (address.deliveryMode) {
+            const modeText = address.deliveryMode === 'delivery' ? 'Home Delivery' : 'Takeaway';
+            const modeIcon = address.deliveryMode === 'delivery' ? '🛵' : '🏪';
+            detailsHTML += `<p><span class="text-gray-600">${modeIcon} Mode:</span> <span class="font-medium">${modeText}</span></p>`;
+        }
+        
+        if (detailsHTML === '') {
+            detailsHTML = '<p class="text-gray-500">No customer details available</p>';
+        }
+        
+        customerDetails.innerHTML = detailsHTML;
+    }
+    
+    // DISPLAY DELIVERY ADDRESS ON PAGE
+    function displayDeliveryAddress(address, delivery) {
+        const deliveryAddress = document.getElementById('delivery-address');
+        deliveryAddress.innerHTML = '';
+        
+        const deliveryMode = address.deliveryMode || delivery.mode || 'takeaway';
+        
+        if (deliveryMode === 'delivery') {
+            let addressHTML = '';
+            
+            if (address.houseNumber || address.locality) {
+                // Format address for delivery
+                addressHTML += `<p><span class="text-gray-600">🏠 Address:</span> <span class="font-medium">${address.houseNumber || ''}, ${address.locality || ''}</span></p>`;
+                
+                if (address.street) {
+                    addressHTML += `<p><span class="text-gray-600">📍 Street:</span> <span class="font-medium">${address.street}</span></p>`;
+                }
+                
+                addressHTML += `<p><span class="text-gray-600">🏙️ City:</span> <span class="font-medium">${address.city || 'Indore'}, ${address.state || 'MP'} - ${address.pincode || ''}</span></p>`;
+                
+                if (address.addressType) {
+                    addressHTML += `<p><span class="text-gray-600">🏢 Type:</span> <span class="font-medium">${address.addressType}</span></p>`;
+                }
+                
+                if (delivery.locationLink) {
+                    addressHTML += `<p><span class="text-gray-600">🗺️ Map:</span> <a href="${delivery.locationLink}" target="_blank" class="text-blue-600 underline">View Location</a></p>`;
+                }
+                
+                if (delivery.distance) {
+                    addressHTML += `<p><span class="text-gray-600">📏 Distance:</span> <span class="font-medium">${delivery.distance} km from restaurant</span></p>`;
+                }
+                
+                if (delivery.charge > 0) {
+                    addressHTML += `<p><span class="text-gray-600">💰 Delivery Fee:</span> <span class="font-medium">₹${parseFloat(delivery.charge).toFixed(2)}</span></p>`;
+                }
+            } else {
+                addressHTML = '<p class="text-red-500">⚠️ Delivery address details not complete</p>';
+            }
+            
+            deliveryAddress.innerHTML = addressHTML;
+            
+        } else {
+            // Takeaway mode
+            deliveryAddress.innerHTML = `
+                <p><span class="text-gray-600">🏪 Pickup Location:</span> <span class="font-medium">Prime Square, Omaxe City 1, Indore</span></p>
+                <p><span class="text-gray-600">⏰ Pickup Timings:</span> <span class="font-medium">6:00 PM - 10:00 PM</span></p>
+                <p><span class="text-gray-600">📱 OTP Verification:</span> <span class="font-medium">Required at pickup</span></p>
+                <p><span class="text-gray-600">👤 Pickup Name:</span> <span class="font-medium">${address.name || 'Not specified'}</span></p>
+                <p><span class="text-gray-600">📞 Contact:</span> <span class="font-medium">${address.phone || 'Not specified'}</span></p>
+            `;
         }
     }
     
     // RAZORPAY PAYMENT
     function initiateRazorpayPayment() {
         if (paymentProcessing || !orderData.address?.phone) {
-            showError("Please complete details first");
+            showError("Please complete customer details first");
             return;
         }
         
@@ -376,6 +506,7 @@
         }
         
         showLoading();
+        paymentProcessing = true;
         
         const options = {
             key: RAZORPAY_KEY_ID,
@@ -390,28 +521,45 @@
             },
             handler: function(response) {
                 hideLoading();
+                paymentProcessing = false;
                 processPaymentSuccess(response.razorpay_payment_id);
             },
-            theme: { color: "#10B981" }
+            theme: { color: "#10B981" },
+            modal: {
+                ondismiss: function() {
+                    hideLoading();
+                    paymentProcessing = false;
+                }
+            }
         };
         
         const rzp = new Razorpay(options);
         
         rzp.on('payment.failed', function(response) {
             hideLoading();
-            showError(response.error.description || "Payment failed");
+            paymentProcessing = false;
+            showError(response.error.description || "Payment failed. Please try again.");
+            document.getElementById('retry-payment').classList.remove('hidden');
         });
         
         rzp.open();
         
-        // Auto hide loading after 5s
-        setTimeout(() => hideLoading(), 5000);
+        // Auto hide loading after 10s
+        setTimeout(() => {
+            if (paymentProcessing) {
+                hideLoading();
+                paymentProcessing = false;
+                showError("Payment timeout. Please try again.");
+            }
+        }, 10000);
     }
     
     // PROCESS PAYMENT SUCCESS
     function processPaymentSuccess(paymentId) {
         // Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        const deliveryMode = orderData.totals.deliveryMode || 'takeaway';
         
         // Save order with all totals
         const order = {
@@ -422,13 +570,14 @@
             customer: orderData.address.name,
             phone: orderData.address.phone,
             items: orderData.cart,
-            deliveryMode: orderData.totals.deliveryMode || 'takeaway',
+            deliveryMode: deliveryMode,
             totals: orderData.totals,
             address: orderData.address,
             delivery: orderData.delivery,
             timestamp: new Date().toISOString()
         };
         
+        // Save order to localStorage
         let orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
         orders.push(order);
         localStorage.setItem('easygo-orders', JSON.stringify(orders));
@@ -436,21 +585,21 @@
         // Save for tracking
         localStorage.setItem('easygo-otp', otp);
         localStorage.setItem('easygo-order-id', order.id);
-        localStorage.setItem('easygo-delivery-mode', orderData.totals.deliveryMode || 'takeaway');
+        localStorage.setItem('easygo-delivery-mode', deliveryMode);
         
-        // Clear cart
+        // Clear cart (keep address and delivery for future orders)
         localStorage.removeItem('easygo-cart');
         localStorage.removeItem('easygo-cart-items-total');
         localStorage.removeItem('easygo-coupon');
         
-        // Show OTP
+        // Show OTP in success modal
         document.getElementById('generated-otp').textContent = otp;
         document.getElementById('success-modal').classList.remove('hidden');
         
-        // Send WhatsApp
+        // Send WhatsApp message
         sendWhatsApp(order, otp);
         
-        // Auto redirect
+        // Auto redirect to tracking after 5 seconds
         setTimeout(() => {
             if (!document.getElementById('success-modal').classList.contains('hidden')) {
                 window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
@@ -458,32 +607,33 @@
         }, 5000);
     }
     
-    // SEND WHATSAPP - UPDATED
+    // SEND WHATSAPP MESSAGE
     function sendWhatsApp(order, otp) {
         try {
             let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
+            
+            // Basic order info
             message += `*Order ID:* ${order.id}%0A`;
             message += `*OTP:* ${otp}%0A`;
             message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
             message += `*Payment ID:* ${order.paymentId}%0A`;
             message += `*Status:* PENDING ⚠️%0A%0A`;
             
-            // Add items
-            message += `*Items:*%0A`;
+            // Items
+            message += `*Items Ordered:*%0A`;
             order.items.forEach(item => {
                 message += `• ${item.name} × ${item.quantity} - ₹${item.total}%0A`;
             });
             
-            message += `%0A*Totals:*%0A`;
+            message += `%0A*Payment Breakdown:*%0A`;
             message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
             
             if (order.totals?.gstFood > 0) {
                 message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
             }
             
-            const deliveryMode = order.deliveryMode || 'takeaway';
-            if (deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
-                message += `Delivery: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
+            if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
+                message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
                 if (order.totals?.gstDelivery > 0) {
                     message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
                 }
@@ -494,40 +644,50 @@
             // Customer details
             message += `*Customer Details:*%0A`;
             message += `Name: ${order.customer || 'N/A'}%0A`;
-            message += `Phone: ${order.phone || 'N/A'}%0A%0A`;
+            message += `Phone: ${order.phone || 'N/A'}%0A`;
             
-            if (deliveryMode === 'delivery') {
-                message += `*📍 Delivery Address:*%0A`;
+            // Delivery/Takeaway info
+            if (order.deliveryMode === 'delivery') {
+                message += `%0A*📍 Delivery Address:*%0A`;
+                
                 if (order.address?.houseNumber || order.address?.locality) {
                     message += `${order.address.houseNumber || ''}, ${order.address.locality || ''}%0A`;
-                    message += `${order.address.street || ''}%0A`;
+                    if (order.address.street) message += `${order.address.street}%0A`;
                     message += `${order.address.city || 'Indore'}, ${order.address.state || 'MP'} - ${order.address.pincode || ''}%0A`;
+                    
+                    if (order.address.addressType) {
+                        message += `Type: ${order.address.addressType}%0A`;
+                    }
                 }
                 
-                if (order.address?.specialRequest) {
-                    message += `%0A*Special Request:* ${order.address.specialRequest}%0A`;
+                if (order.delivery?.locationLink) {
+                    message += `%0A📍 *Map Link:* ${order.delivery.locationLink}`;
                 }
+                
             } else {
-                message += `*🏪 Takeaway Pickup:*%0A`;
+                message += `%0A*🏪 Takeaway Pickup:*%0A`;
                 message += `Prime Square, Omaxe City 1, Indore%0A`;
                 message += `Timings: 6:00 PM - 10:00 PM%0A`;
-                message += `Customer will pickup order%0A`;
+                message += `Customer will pickup with OTP verification%0A`;
             }
             
-            console.log("WhatsApp message prepared:", message);
+            console.log("WhatsApp message:", decodeURIComponent(message));
+            
+            // Open WhatsApp with the message
             window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
             
-            // Save to delivery system
+            // Also save to delivery system
             saveToDeliverySystem(order, otp);
             
         } catch (error) {
             console.error("Error sending WhatsApp:", error);
-            const fallbackMsg = `New Order! OTP: ${otp}, Amount: ₹${order.amount}, Phone: ${order.phone}`;
+            // Fallback simple message
+            const fallbackMsg = `New Order! Order ID: ${order.id}, OTP: ${otp}, Amount: ₹${order.amount}, Phone: ${order.phone}`;
             window.open(`https://wa.me/917651837322?text=${fallbackMsg}`, '_blank');
         }
     }
     
-    // SAVE ORDER TO DELIVERY SYSTEM
+    // SAVE TO DELIVERY SYSTEM
     function saveToDeliverySystem(order, otp) {
         try {
             let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
@@ -581,7 +741,20 @@
             window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
         });
         
-        document.getElementById('retry-payment').addEventListener('click', initiateRazorpayPayment);
+        document.getElementById('retry-payment').addEventListener('click', function() {
+            document.getElementById('retry-payment').classList.add('hidden');
+            initiateRazorpayPayment();
+        });
+        
+        // Add a refresh button for testing
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = '🔄 Refresh Data';
+        refreshBtn.className = 'fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-600 z-40';
+        refreshBtn.onclick = () => {
+            loadOrderData();
+            showError('Data refreshed!');
+        };
+        document.body.appendChild(refreshBtn);
     });
 </script>
     
