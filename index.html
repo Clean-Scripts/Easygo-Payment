@@ -374,7 +374,7 @@
         }
     }
     
-    // DISPLAY CART ITEMS ON PAGE
+    // DISPLAY CART ITEMS ON PAGE - FIXED WITH COST
     function displayCartItems(cart) {
         const orderItems = document.getElementById('order-items');
         orderItems.innerHTML = '';
@@ -387,21 +387,40 @@
         cart.forEach(item => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-xl';
+            
+            // Calculate price per item
+            const quantity = parseInt(item.quantity) || 1;
+            const totalPrice = parseFloat(item.total) || 0;
+            const pricePerItem = totalPrice / quantity;
+            
             itemDiv.innerHTML = `
                 <div class="flex-1">
                     <p class="font-medium text-gray-800">${item.name || 'Unknown Item'}</p>
                     <div class="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                        <span>Qty: ${item.quantity || 1}</span>
+                        <span>Qty: ${quantity}</span>
                         <span>Pack: ${item.pack || 'Standard'}</span>
+                        <span>Price: ₹${pricePerItem.toFixed(2)} each</span>
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-gray-900">₹${parseFloat(item.total || 0).toFixed(2)}</p>
-                    <p class="text-xs text-gray-500">₹${parseFloat(item.price || 0).toFixed(2)} each</p>
+                    <p class="font-bold text-gray-900">₹${totalPrice.toFixed(2)}</p>
+                    <p class="text-xs text-gray-500">Total for ${quantity} item(s)</p>
                 </div>
             `;
             orderItems.appendChild(itemDiv);
         });
+        
+        // Add cart summary
+        const cartTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'border-t pt-4 mt-4';
+        summaryDiv.innerHTML = `
+            <div class="flex justify-between items-center">
+                <span class="font-medium text-gray-700">Cart Subtotal (${cart.length} items)</span>
+                <span class="font-bold text-lg text-gray-900">₹${cartTotal.toFixed(2)}</span>
+            </div>
+        `;
+        orderItems.appendChild(summaryDiv);
     }
     
     // DISPLAY CUSTOMER DETAILS ON PAGE
@@ -596,7 +615,7 @@
         document.getElementById('generated-otp').textContent = otp;
         document.getElementById('success-modal').classList.remove('hidden');
         
-        // Send WhatsApp message
+        // Send WhatsApp message WITH ALL FETCHED DETAILS
         sendWhatsApp(order, otp);
         
         // Auto redirect to tracking after 5 seconds
@@ -607,7 +626,7 @@
         }, 5000);
     }
     
-    // SEND WHATSAPP MESSAGE
+    // SEND WHATSAPP MESSAGE - CONFIRMED: WILL SEND ALL FETCHED DETAILS
     function sendWhatsApp(order, otp) {
         try {
             let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
@@ -619,10 +638,15 @@
             message += `*Payment ID:* ${order.paymentId}%0A`;
             message += `*Status:* PENDING ⚠️%0A%0A`;
             
-            // Items
+            // Items with price details
             message += `*Items Ordered:*%0A`;
             order.items.forEach(item => {
-                message += `• ${item.name} × ${item.quantity} - ₹${item.total}%0A`;
+                const quantity = parseInt(item.quantity) || 1;
+                const totalPrice = parseFloat(item.total) || 0;
+                const pricePerItem = totalPrice / quantity;
+                
+                message += `• ${item.name} × ${quantity} (${item.pack || 'Standard'})%0A`;
+                message += `  Price: ₹${pricePerItem.toFixed(2)} each → Total: ₹${totalPrice.toFixed(2)}%0A`;
             });
             
             message += `%0A*Payment Breakdown:*%0A`;
@@ -641,12 +665,12 @@
             
             message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
             
-            // Customer details
+            // Customer details (FETCHED FROM ADDRESS PAGE)
             message += `*Customer Details:*%0A`;
             message += `Name: ${order.customer || 'N/A'}%0A`;
             message += `Phone: ${order.phone || 'N/A'}%0A`;
             
-            // Delivery/Takeaway info
+            // Delivery/Takeaway info (FETCHED FROM ADDRESS PAGE)
             if (order.deliveryMode === 'delivery') {
                 message += `%0A*📍 Delivery Address:*%0A`;
                 
@@ -660,6 +684,14 @@
                     }
                 }
                 
+                if (order.delivery?.distance) {
+                    message += `Distance: ${order.delivery.distance} km%0A`;
+                }
+                
+                if (order.delivery?.charge > 0) {
+                    message += `Delivery Fee: ₹${parseFloat(order.delivery.charge).toFixed(2)}%0A`;
+                }
+                
                 if (order.delivery?.locationLink) {
                     message += `%0A📍 *Map Link:* ${order.delivery.locationLink}`;
                 }
@@ -668,10 +700,12 @@
                 message += `%0A*🏪 Takeaway Pickup:*%0A`;
                 message += `Prime Square, Omaxe City 1, Indore%0A`;
                 message += `Timings: 6:00 PM - 10:00 PM%0A`;
-                message += `Customer will pickup with OTP verification%0A`;
+                message += `Customer: ${order.customer || 'N/A'}%0A`;
+                message += `Phone: ${order.phone || 'N/A'}%0A`;
+                message += `OTP verification required at pickup%0A`;
             }
             
-            console.log("WhatsApp message:", decodeURIComponent(message));
+            console.log("WhatsApp message with ALL FETCHED DETAILS:", decodeURIComponent(message));
             
             // Open WhatsApp with the message
             window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
@@ -745,16 +779,6 @@
             document.getElementById('retry-payment').classList.add('hidden');
             initiateRazorpayPayment();
         });
-        
-        // Add a refresh button for testing
-        const refreshBtn = document.createElement('button');
-        refreshBtn.textContent = '🔄 Refresh Data';
-        refreshBtn.className = 'fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-600 z-40';
-        refreshBtn.onclick = () => {
-            loadOrderData();
-            showError('Data refreshed!');
-        };
-        document.body.appendChild(refreshBtn);
     });
 </script>
     
