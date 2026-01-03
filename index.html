@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/Easygo-Address/refs/heads/main/logo.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <title>Easy Go | Secure Payment</title>
@@ -66,10 +66,7 @@
         }
         
         .gradient-bg {
-            background-image: url('https://raw.githubusercontent.com/Clean-Scripts/Easygo-Address/refs/heads/main/Banner.png');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
         
         /* WhatsApp notification styles */
@@ -193,7 +190,7 @@
                     <div class="mt-6 pt-6 border-t">
                         <div class="flex items-center text-sm text-gray-600">
                             <span class="mr-2">🔐</span>
-                            <span>Your Payment is Secured with 256-Bit SSL Encryption</span>
+                            <span>Your payment is secured with 256-bit SSL encryption</span>
                         </div>
                     </div>
                 </div>
@@ -243,7 +240,7 @@
                                 <span class="mr-2">💳</span>
                                 <span>Razorpay Secure Payment</span>
                             </div>
-                            <span class="text-green-600 font-medium">No Hidden Charges</span>
+                            <span class="text-green-600 font-medium">No hidden charges</span>
                         </div>
                     </div>
                 </div>
@@ -282,7 +279,7 @@
                                 <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
                                 <span>NetBanking</span>
                             </div>
-                            <p class="text-xs text-gray-500 mt-3">Powered by Razorpay | PCI DSS Certified</p>
+                            <p class="text-xs text-gray-500 mt-3">Powered by Razorpay • PCI DSS Certified</p>
                         </div>
                     </div>
                     
@@ -421,7 +418,7 @@
 <script>
     // CONFIGURATION
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
-    const RESTAURANT_PHONE = "917651837322"; // Fixed phone number
+    const RESTAURANT_PHONE = "917651837322"; // YOUR CORRECT NUMBER
     
     // GLOBAL STATE
     let orderData = {};
@@ -1225,14 +1222,10 @@
         // Create WhatsApp URL
         const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${message}`;
         
-        // Try to send message automatically (this works on mobile devices)
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-            // For mobile devices, open WhatsApp directly
-            window.location.href = whatsappURL;
-        } else {
-            // For desktop, open in new tab
-            window.open(whatsappURL, '_blank');
-        }
+        // Try to send message automatically
+        // For mobile devices, this will open WhatsApp directly
+        // For desktop, this will open WhatsApp Web
+        window.location.href = whatsappURL;
         
         localStorage.setItem('easygo-whatsapp-sent', 'true');
         
