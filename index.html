@@ -68,6 +68,27 @@
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        
+        /* WhatsApp notification styles */
+        .whatsapp-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #25D366;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
     </style>
 </head>
 <body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -86,6 +107,17 @@
         <div class="flex items-center space-x-3">
             <div class="pulse-dot w-3 h-3 bg-yellow-500 rounded-full"></div>
             <span class="font-medium">Processing payment...</span>
+        </div>
+    </div>
+
+    <!-- WhatsApp Notification -->
+    <div id="whatsapp-notification" class="whatsapp-notification hidden">
+        <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+            <span class="text-green-500 text-xl">✓</span>
+        </div>
+        <div>
+            <p class="font-bold">Order details sent to EasyGo!</p>
+            <p class="text-sm opacity-90">Check your WhatsApp for confirmation</p>
         </div>
     </div>
 
@@ -406,6 +438,7 @@
 <script>
     // CONFIGURATION
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
+    const RESTAURANT_PHONE = "917651837322";
     
     // GLOBAL STATE
     let orderData = {};
@@ -416,17 +449,6 @@
     let currentRazorpayInstance = null;
     
     // ERROR HANDLING ENHANCEMENTS
-    const errorMessages = {
-        network: "Network error. Please check your internet connection.",
-        amount: "Invalid payment amount. Please refresh and try again.",
-        customer: "Customer details incomplete. Please go back and fill details.",
-        razorpay: "Payment gateway error. Please try again.",
-        timeout: "Payment timeout. Please try again.",
-        generic: "Something went wrong. Don't worry, your money is safe.",
-        refund: "If amount was deducted, refund will be processed in 24-48 working hours automatically."
-    };
-    
-    // ENHANCED ERROR HANDLING
     function showGlobalError(message, type = 'error') {
         const banner = document.getElementById('global-error-banner');
         const text = document.getElementById('global-error-text');
@@ -454,6 +476,14 @@
     
     function hideGlobalError() {
         document.getElementById('global-error-banner').classList.add('hidden');
+    }
+    
+    function showWhatsAppNotification() {
+        const notification = document.getElementById('whatsapp-notification');
+        notification.classList.remove('hidden');
+        setTimeout(() => {
+            notification.classList.add('hidden');
+        }, 5000);
     }
     
     function showPaymentStatus(message) {
@@ -495,7 +525,7 @@
         document.getElementById('progress-bar').style.width = '30%';
     }
     
-    // LOAD ORDER DATA WITH ENHANCED ERROR HANDLING
+    // LOAD ORDER DATA
     function loadOrderData() {
         try {
             // Load all data with validation
@@ -512,7 +542,7 @@
                 return false;
             }
             
-            // Validate customer details for delivery
+            // Validate customer details
             const deliveryMode = address.deliveryMode || delivery.mode || 'takeaway';
             if (deliveryMode === 'delivery' && (!address.phone || !address.name)) {
                 showGlobalError("Please complete delivery details before payment", 'warning');
@@ -522,7 +552,7 @@
                 return false;
             }
             
-            // Calculate totals with proper error handling
+            // Calculate totals
             let foodTotal = 0;
             try {
                 foodTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
@@ -537,7 +567,7 @@
             
             // Validate amount
             if (foodTotal <= 0 || foodTotal > 100000) {
-                showGlobalError("Invalid order amount. Please refresh and try again.", 'error');
+                showGlobalError("Invalid order amount. Please refresh page.", 'error');
                 return false;
             }
             
@@ -845,7 +875,111 @@
         }
     }
     
-    // ENHANCED RAZORPAY PAYMENT WITH COMPREHENSIVE ERROR HANDLING
+    // ENHANCED WHATSAPP NOTIFICATION (Background)
+    function sendWhatsAppNotificationToRestaurant(order, otp) {
+        try {
+            let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
+            message += `*Order ID:* ${order.id}%0A`;
+            message += `*OTP:* ${otp}%0A`;
+            message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
+            message += `*Payment ID:* ${order.paymentId}%0A`;
+            message += `*Status:* CONFIRMED ✅%0A%0A`;
+            
+            // Add items
+            message += `*Items Ordered:*%0A`;
+            order.items.forEach(item => {
+                const quantity = parseInt(item.quantity) || 1;
+                const totalPrice = parseFloat(item.total) || 0;
+                const pricePerItem = totalPrice / quantity;
+                
+                message += `• ${item.name} × ${quantity} (${item.pack || 'Standard'})%0A`;
+                message += `  Price: ₹${pricePerItem.toFixed(2)} each → Total: ₹${totalPrice.toFixed(2)}%0A`;
+            });
+            
+            message += `%0A*Payment Breakdown:*%0A`;
+            message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
+            
+            if (order.totals?.gstFood > 0) {
+                message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
+            }
+            
+            if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
+                message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
+                if (order.totals?.gstDelivery > 0) {
+                    message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
+                }
+            }
+            
+            message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
+            
+            // Customer details
+            message += `*Customer Details:*%0A`;
+            message += `Name: ${order.customer || 'N/A'}%0A`;
+            message += `Phone: ${order.phone || 'N/A'}%0A`;
+            message += `Payment Method: Razorpay (Online)%0A`;
+            
+            // Delivery/Takeaway info
+            if (order.deliveryMode === 'delivery') {
+                message += `%0A*📍 Delivery Address:*%0A`;
+                
+                if (order.address?.houseNumber || order.address?.locality) {
+                    message += `${order.address.houseNumber || ''}, ${order.address.locality || ''}%0A`;
+                    if (order.address.street) message += `${order.address.street}%0A`;
+                    message += `${order.address.city || 'Indore'}, ${order.address.state || 'MP'} - ${order.address.pincode || ''}%0A`;
+                    
+                    if (order.address.addressType) {
+                        message += `Type: ${order.address.addressType}%0A`;
+                    }
+                }
+                
+                if (order.delivery?.distance) {
+                    message += `Distance: ${order.delivery.distance} km%0A`;
+                }
+                
+                if (order.delivery?.locationLink) {
+                    message += `%0A📍 *Location Link:*%0A${order.delivery.locationLink}%0A`;
+                }
+                
+            } else {
+                message += `%0A*🏪 Takeaway Pickup:*%0A`;
+                message += `Prime Square, Omaxe City 1, Indore%0A`;
+                message += `Timings: 6:00 PM - 10:00 PM%0A`;
+                message += `Customer: ${order.customer || 'N/A'}%0A`;
+                message += `Phone: ${order.phone || 'N/A'}%0A`;
+                message += `OTP verification required at pickup%0A`;
+            }
+            
+            message += `%0A⏰ *Order Time:* ${new Date().toLocaleTimeString()}%0A`;
+            message += `📅 *Date:* ${new Date().toLocaleDateString()}%0A%0A`;
+            message += `_Order placed via EasyGo Payment System_`;
+            
+            console.log("Sending WhatsApp to restaurant:", decodeURIComponent(message));
+            
+            // Create invisible iframe for background WhatsApp message
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = `https://web.whatsapp.com/send?phone=${RESTAURANT_PHONE}&text=${message}`;
+            document.body.appendChild(iframe);
+            
+            // Show notification to user
+            showWhatsAppNotification();
+            
+            // Remove iframe after delay
+            setTimeout(() => {
+                if (iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }, 3000);
+            
+            return true;
+            
+        } catch (error) {
+            console.error("Error sending WhatsApp:", error);
+            return false;
+        }
+    }
+    
+    // RAZORPAY PAYMENT
     function initiateRazorpayPayment() {
         if (paymentProcessing) {
             showGlobalError("A payment is already in progress. Please wait.", 'warning');
@@ -906,7 +1040,6 @@
             const rzp = new Razorpay(options);
             currentRazorpayInstance = rzp;
             
-            // Enhanced error handling for all possible scenarios
             rzp.on('payment.failed', function(response) {
                 handlePaymentFailure(response);
             });
@@ -922,7 +1055,7 @@
                 if (paymentProcessing) {
                     handlePaymentTimeout();
                 }
-            }, 120000); // 2 minutes timeout
+            }, 120000);
             
         } catch (error) {
             console.error("Razorpay initialization error:", error);
@@ -980,31 +1113,6 @@
         let errorMsg = response.error.description || "Payment failed. Please try again.";
         let detailedError = response.error.reason || "";
         
-        // Check for specific error types
-        if (errorMsg.includes('UPI') || errorMsg.includes('app not found') || errorMsg.includes('no app')) {
-            errorMsg = "No UPI app detected. Please install GPay, PhonePe, Paytm or any UPI app to proceed.";
-        } else if (errorMsg.includes('timeout') || errorMsg.includes('expired')) {
-            errorMsg = "Payment session expired. Please try again.";
-        } else if (errorMsg.includes('bank') || errorMsg.includes('declined')) {
-            errorMsg = "Bank declined the transaction. Please check with your bank or use another payment method.";
-        } else if (errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
-            errorMsg = "Insufficient balance. Please check your account balance.";
-        }
-        
-        // Store failure for analytics
-        const failureData = {
-            error: errorMsg,
-            detailedError: detailedError,
-            response: response,
-            timestamp: new Date().toISOString(),
-            amount: finalAmount,
-            attempts: paymentAttempts
-        };
-        
-        let failures = JSON.parse(localStorage.getItem('easygo-payment-failures') || '[]');
-        failures.push(failureData);
-        localStorage.setItem('easygo-payment-failures', JSON.stringify(failures));
-        
         // Show failure modal
         showPaymentFailure(errorMsg, response);
     }
@@ -1043,17 +1151,7 @@
             clearTimeout(window.paymentTimeout);
         }
         
-        let errorMsg = "Unable to connect to payment gateway. ";
-        
-        if (error.message && error.message.includes('key')) {
-            errorMsg += "Payment gateway configuration error. Please contact support.";
-        } else if (error.message && error.message.includes('network')) {
-            errorMsg += "Network error. Please check your internet connection.";
-        } else {
-            errorMsg += "Please try again or contact support.";
-        }
-        
-        showGlobalError(errorMsg, 'error');
+        showGlobalError("Unable to connect to payment gateway. Please try again.", 'error');
         document.getElementById('retry-payment').classList.remove('hidden');
     }
     
@@ -1072,40 +1170,69 @@
     function processPaymentSuccess(paymentId) {
         // Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const orderId = "EG" + Date.now().toString().slice(-6);
+        const orderId = "EG" + Date.now().toString().slice(-8);
         
-        // Create order object
+        // Create comprehensive order object
         const order = {
             id: orderId,
             paymentId: paymentId,
             otp: otp,
             amount: finalAmount,
-            customer: orderData.address.name,
-            phone: orderData.address.phone,
-            items: orderData.cart,
+            customer: orderData.address.name || 'Customer',
+            phone: orderData.address.phone || '',
+            items: orderData.cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                pack: item.pack,
+                total: parseFloat(item.total) || 0
+            })),
             deliveryMode: orderData.totals.deliveryMode,
             totals: orderData.totals,
             address: orderData.address,
             delivery: orderData.delivery,
             timestamp: new Date().toISOString(),
-            paymentMethod: "razorpay"
+            paymentMethod: "razorpay",
+            status: "pending"
         };
         
-        // Save order
+        // Save order to localStorage
         saveOrderAndProceed(order, otp);
         
-        // Send WhatsApp notification
-        sendWhatsAppNotification(order, otp);
+        // Send WhatsApp notification to restaurant (background)
+        sendWhatsAppNotificationToRestaurant(order, otp);
     }
     
     function saveOrderAndProceed(order, otp) {
         try {
-            // Save to localStorage
+            // Save to orders history
             let orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
             orders.push(order);
             localStorage.setItem('easygo-orders', JSON.stringify(orders));
             
-            // Save for tracking
+            // Save to active orders (for admin panel)
+            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+            activeOrders.push({
+                orderId: order.id,
+                razorpayPaymentId: order.paymentId,
+                customerName: order.customer,
+                customerPhone: order.phone,
+                totalAmount: order.amount,
+                items: order.items,
+                address: order.deliveryMode === 'delivery' ? 
+                    `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
+                    "Takeaway - Prime Square, Omaxe City 1, Indore",
+                deliveryMode: order.deliveryMode,
+                status: 'pending',
+                timestamp: order.timestamp,
+                paymentMethod: order.paymentMethod,
+                paymentId: order.paymentId,
+                otp: otp,
+                deliveryPartner: "Nishant",
+                deliveryPartnerPhone: "+917651837322"
+            });
+            localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
+            
+            // Save for tracking page
             localStorage.setItem('easygo-otp', otp);
             localStorage.setItem('easygo-order-id', order.id);
             localStorage.setItem('easygo-delivery-mode', order.deliveryMode);
@@ -1113,9 +1240,6 @@
             // Clear cart but keep address for future orders
             localStorage.removeItem('easygo-cart');
             localStorage.removeItem('easygo-cart-items-total');
-            
-            // Save to delivery system
-            saveToDeliverySystem(order, otp);
             
             // Clear any payment failures
             localStorage.removeItem('easygo-payment-failures');
@@ -1133,132 +1257,11 @@
             
         } catch (error) {
             console.error("Error saving order:", error);
-            // Still show success modal even if saving fails
+            // Still show success modal
             document.getElementById('generated-otp').textContent = otp;
             document.getElementById('success-modal').classList.remove('hidden');
             
             showGlobalError("Order confirmed! Please note your OTP: " + otp, 'info');
-        }
-    }
-    
-    function sendWhatsAppNotification(order, otp) {
-        try {
-            let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
-            message += `*Order ID:* ${order.id}%0A`;
-            message += `*OTP:* ${otp}%0A`;
-            message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
-            message += `*Payment ID:* ${order.paymentId}%0A`;
-            message += `*Status:* CONFIRMED ✅%0A%0A`;
-            
-            // Add items
-            message += `*Items Ordered:*%0A`;
-            order.items.forEach(item => {
-                const quantity = parseInt(item.quantity) || 1;
-                const totalPrice = parseFloat(item.total) || 0;
-                const pricePerItem = totalPrice / quantity;
-                
-                message += `• ${item.name} × ${quantity} (${item.pack || 'Standard'})%0A`;
-                message += `  Price: ₹${pricePerItem.toFixed(2)} each → Total: ₹${totalPrice.toFixed(2)}%0A`;
-            });
-            
-            message += `%0A*Payment Breakdown:*%0A`;
-            message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
-            
-            if (order.totals?.gstFood > 0) {
-                message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
-            }
-            
-            if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
-                message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
-                if (order.totals?.gstDelivery > 0) {
-                    message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
-                }
-            }
-            
-            message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
-            
-            // Customer details
-            message += `*Customer Details:*%0A`;
-            message += `Name: ${order.customer || 'N/A'}%0A`;
-            message += `Phone: ${order.phone || 'N/A'}%0A`;
-            
-            // Delivery/Takeaway info
-            if (order.deliveryMode === 'delivery') {
-                message += `%0A*📍 Delivery Address:*%0A`;
-                
-                if (order.address?.houseNumber || order.address?.locality) {
-                    message += `${order.address.houseNumber || ''}, ${order.address.locality || ''}%0A`;
-                    if (order.address.street) message += `${order.address.street}%0A`;
-                    message += `${order.address.city || 'Indore'}, ${order.address.state || 'MP'} - ${order.address.pincode || ''}%0A`;
-                    
-                    if (order.address.addressType) {
-                        message += `Type: ${order.address.addressType}%0A`;
-                    }
-                }
-                
-                if (order.delivery?.distance) {
-                    message += `Distance: ${order.delivery.distance} km%0A`;
-                }
-                
-            } else {
-                message += `%0A*🏪 Takeaway Pickup:*%0A`;
-                message += `Prime Square, Omaxe City 1, Indore%0A`;
-                message += `Timings: 6:00 PM - 10:00 PM%0A`;
-                message += `Customer: ${order.customer || 'N/A'}%0A`;
-                message += `Phone: ${order.phone || 'N/A'}%0A`;
-                message += `OTP verification required at pickup%0A`;
-            }
-            
-            console.log("WhatsApp message:", decodeURIComponent(message));
-            
-            // Open WhatsApp
-            window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
-            
-        } catch (error) {
-            console.error("Error sending WhatsApp:", error);
-        }
-    }
-    
-    function saveToDeliverySystem(order, otp) {
-        try {
-            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
-            let allOrders = JSON.parse(localStorage.getItem('easygo-all-orders')) || [];
-            
-            const deliveryOrder = {
-                orderId: order.id,
-                razorpayPaymentId: order.paymentId,
-                customerName: order.customer || order.address?.name || 'Customer',
-                customerPhone: order.phone || order.address?.phone || '',
-                totalAmount: order.amount,
-                items: order.items.map(item => ({
-                    name: item.name,
-                    quantity: item.quantity,
-                    price: parseFloat(item.total) || 0,
-                    pack: item.pack || 'standard'
-                })),
-                address: order.deliveryMode === 'delivery' ? 
-                    `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
-                    "Takeaway - Prime Square, Omaxe City 1, Indore",
-                deliveryMode: order.deliveryMode || 'takeaway',
-                status: 'order-received',
-                timestamp: new Date().toISOString(),
-                paymentMethod: order.paymentMethod || 'razorpay',
-                paymentId: order.paymentId,
-                otp: otp,
-                deliveryPartner: "EasyGo-Rider",
-                deliveryPartnerPhone: "+91 76518 37322"
-            };
-            
-            activeOrders.push(deliveryOrder);
-            localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
-            
-            allOrders.push(deliveryOrder);
-            localStorage.setItem('easygo-all-orders', JSON.stringify(allOrders));
-            
-            console.log("Order saved to delivery system");
-            
-        } catch (error) {
-            console.error("Error saving to delivery system:", error);
         }
     }
     
@@ -1298,36 +1301,12 @@
             document.getElementById('payment-failed-modal').classList.add('hidden');
             initiateRazorpayPayment();
         });
-        
-        // Add offline payment detection
-        window.addEventListener('offline', function() {
-            showGlobalError("You are offline. Please check your internet connection.", 'warning');
-        });
-        
-        window.addEventListener('online', function() {
-            showGlobalError("You are back online. You can proceed with payment.", 'info');
-            setTimeout(hideGlobalError, 3000);
-        });
-        
-        // Handle page visibility change (tab switch)
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden && paymentProcessing) {
-                showGlobalError("Payment in progress. Please don't switch tabs.", 'warning');
-            }
-        });
     }
     
     function checkPreviousPaymentAttempts() {
         const failures = JSON.parse(localStorage.getItem('easygo-payment-failures') || '[]');
         if (failures.length > 0) {
-            const lastFailure = failures[failures.length - 1];
-            const failureTime = new Date(lastFailure.timestamp);
-            const now = new Date();
-            const hoursDiff = (now - failureTime) / (1000 * 60 * 60);
-            
-            if (hoursDiff < 1) {
-                showGlobalError("We detected a recent payment issue. Please try again.", 'info');
-            }
+            showGlobalError("We detected a recent payment issue. Please try again.", 'info');
         }
     }
 </script>
