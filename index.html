@@ -11,6 +11,18 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
         
+        .razorpay-payment-button { display: none !important; }
+        
+        .payment-success {
+            animation: successPulse 2s infinite;
+        }
+        
+        @keyframes successPulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #10b981;
@@ -24,76 +36,170 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* WhatsApp notification styles */
+        .whatsapp-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #25D366;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+        }
+        
+        .modal-overlay {
+            animation: fadeIn 0.3s ease-out;
+        }
     </style>
 </head>
-<body class="antialiased bg-gray-50 min-h-screen">
+<body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
 
     <!-- Loading Modal -->
     <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 text-center">
-            <div class="loader mx-auto mb-6"></div>
-            <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
-            <p class="text-gray-600 mb-6">Please wait...</p>
-            <p class="text-sm text-gray-500">Do not close or minimize the app</p>
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <div class="loader mx-auto mb-6"></div>
+                <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
+                <p class="text-gray-600 mb-6" id="loading-message">Connecting to payment gateway...</p>
+                <div class="space-y-2">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="progress-bar" class="bg-green-500 h-2 rounded-full" style="width: 30%"></div>
+                    </div>
+                    <p class="text-sm text-gray-500">Do not close this window</p>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Success Modal -->
     <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 text-center">
-            <div class="text-6xl mb-6">🎉</div>
-            <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
-            <p class="text-gray-600 mb-6">Your order has been confirmed.</p>
-            
-            <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl" id="generated-otp">
-                Loading...
-            </div>
-            
-            <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
-                <p class="text-sm text-green-800">
-                    <strong>Next steps:</strong> Share this OTP at pickup/delivery.
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <div class="text-6xl mb-6">🎉</div>
+                <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
+                <p class="text-gray-600 mb-6">Your order has been confirmed. Please save this OTP:</p>
+                
+                <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl payment-success" id="generated-otp">
+                    XXX XXX
+                </div>
+                
+                <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
+                    <p class="text-sm text-green-800">
+                        <strong>Next steps:</strong> Share this OTP with delivery partner for verification.
+                    </p>
+                </div>
+                
+                <p class="text-sm text-gray-500 mb-6">
+                    Order details have been sent to restaurant. Redirecting to tracking...
                 </p>
+                
+                <button id="go-to-tracking" 
+                        class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg hover:shadow-xl">
+                    Track Your Order →
+                </button>
             </div>
-            
-            <button id="go-to-tracking" 
-                    class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors">
-                Track Your Order →
-            </button>
         </div>
     </div>
 
-    <div class="max-w-7xl mx-auto px-4 pt-6 pb-20">
+    <!-- Payment Failed Modal -->
+    <div id="failed-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <div class="text-6xl mb-6">❌</div>
+                <h3 class="text-2xl font-bold mb-4">Payment Failed</h3>
+                <p class="text-gray-600 mb-6" id="failed-message">Payment could not be processed.</p>
+                
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+                    <p class="text-red-800 mb-3" id="failed-details"></p>
+                    <p class="text-sm text-red-700">
+                        <strong>Don't worry!</strong> If amount was deducted but order not confirmed, your refund will be processed within 24-48 working hours.
+                    </p>
+                </div>
+                
+                <div class="space-y-4">
+                    <button id="retry-payment-modal" 
+                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg">
+                        Try Payment Again
+                    </button>
+                    
+                    <button onclick="document.getElementById('failed-modal').classList.add('hidden')" 
+                            class="w-full py-3 bg-gray-200 text-gray-800 rounded-2xl hover:bg-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 pt-10 pb-20">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Order Summary -->
             <div class="space-y-8">
-                <div class="bg-white rounded-3xl shadow-lg p-6">
-                    <h2 class="text-2xl font-bold mb-6">Order Summary</h2>
-                    <div id="order-items" class="space-y-4 mb-6 max-h-80 overflow-y-auto"></div>
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <span class="mr-3">📦</span>
+                        Order Summary
+                    </h2>
+                    
+                    <div id="order-items" class="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
+                        <!-- Items loaded from localStorage -->
+                    </div>
+                    
                     <div class="border-t pt-6">
-                        <h3 class="font-bold mb-4">Customer Details</h3>
-                        <div id="customer-details"></div>
+                        <h3 class="font-bold mb-4 flex items-center">
+                            <span class="mr-2">👤</span>
+                            Customer Details
+                        </h3>
+                        <div id="customer-details" class="space-y-2">
+                            <!-- Details loaded from localStorage -->
+                        </div>
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-3xl shadow-lg p-6">
-                    <h3 class="font-bold mb-4">Order Details</h3>
-                    <div id="delivery-address"></div>
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <h3 class="font-bold mb-4 flex items-center">
+                        <span class="mr-2">📍</span>
+                        Order Details
+                    </h3>
+                    <div id="delivery-address" class="space-y-2">
+                        <!-- Address loaded from localStorage -->
+                    </div>
                 </div>
             </div>
             
             <!-- Payment Section -->
             <div class="space-y-8">
-                <div class="bg-white rounded-3xl shadow-lg p-6">
-                    <h2 class="text-2xl font-bold mb-6">Payment Summary</h2>
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <span class="mr-3">💰</span>
+                        Payment Summary
+                    </h2>
+                    
                     <div class="space-y-4 mb-6">
                         <div class="flex justify-between py-2">
                             <span class="text-gray-700">Food Items Total</span>
                             <span id="food-total" class="font-semibold">₹0</span>
                         </div>
+                        
                         <div class="flex justify-between py-2">
                             <span class="text-gray-700">GST on Food (5%)</span>
                             <span id="gst-food" class="font-semibold">₹0</span>
                         </div>
+                        
                         <div id="delivery-row" class="border-t pt-4 mt-2 hidden">
                             <div class="flex justify-between py-2">
                                 <span class="text-gray-700">Delivery Charge</span>
@@ -104,37 +210,66 @@
                                 <span id="gst-delivery" class="font-semibold">₹0</span>
                             </div>
                         </div>
+                        
                         <div class="border-t-2 border-gray-300 pt-4 mt-2">
                             <div class="flex justify-between text-xl font-bold py-2">
-                                <span class="text-gray-800">Total Amount</span>
+                                <span class="text-gray-800">Total Amount Payable</span>
                                 <span id="final-total" class="text-green-600">₹0</span>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-3xl shadow-lg p-6">
+                <!-- Payment Options -->
+                <div class="bg-white rounded-3xl shadow-xl p-8">
                     <div class="text-center mb-8">
-                        <div class="inline-block bg-green-50 border border-green-200 text-green-800 px-8 py-4 rounded-2xl mb-4">
+                        <div class="inline-block bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 text-green-800 px-8 py-4 rounded-2xl mb-4">
                             <div class="text-sm font-medium mb-1">Total to pay</div>
                             <span class="font-bold text-3xl" id="payment-amount">₹0</span>
                         </div>
-                        <p class="text-gray-600 mb-2">100% Secure Payment via Razorpay</p>
-                        <p class="text-xs text-gray-500">Cards • UPI • NetBanking • Wallet</p>
+                        <p class="text-gray-600">100% Secure Payment via Razorpay</p>
                     </div>
                     
-                    <button id="razorpay-pay-btn" 
-                            class="w-full py-4 bg-blue-600 text-white text-xl font-bold rounded-2xl hover:bg-blue-700 transition-colors mb-4 disabled:opacity-50 disabled:cursor-not-allowed">
-                        Pay Now - ₹<span id="pay-amount">0</span>
-                    </button>
+                    <div class="space-y-4 mb-8">
+                        <button id="razorpay-pay-btn" 
+                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none">
+                            <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                                <path d="M2.5 12.406h19v9h-19z"/>
+                            </svg>
+                            Pay Now - ₹<span id="pay-amount">0</span>
+                        </button>
+                        
+                        <div class="text-center pt-4">
+                            <div class="inline-flex items-center justify-center space-x-3 text-sm text-gray-600 bg-gray-50 px-6 py-3 rounded-full">
+                                <span class="flex items-center">
+                                    <span class="text-green-500 mr-1">✓</span>
+                                    Secure
+                                </span>
+                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>Cards</span>
+                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>UPI</span>
+                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>NetBanking</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-3">Powered by Razorpay | PCI DSS Certified</p>
+                        </div>
+                    </div>
                     
-                    <div class="text-center pt-4">
-                        <p class="text-xs text-gray-500 mb-4">Powered by Razorpay | PCI DSS Certified</p>
-                        <a href="https://clean-scripts.github.io/Easygo-Address/" 
-                           class="text-gray-600 hover:text-gray-900 flex items-center justify-center">
-                            <span class="text-xl mr-2">←</span>
-                            <span>Back to Address</span>
-                        </a>
+                    <div class="space-y-4 pt-6 border-t">
+                        <div class="flex justify-between items-center">
+                            <a href="https://clean-scripts.github.io/Easygo-Address/" 
+                               class="text-gray-600 hover:text-gray-900 flex items-center group transition-colors">
+                                <span class="text-xl mr-2 group-hover:-translate-x-1 transition-transform">←</span>
+                                <span>Back to Address</span>
+                            </a>
+                            <button id="retry-payment" 
+                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center group">
+                                <span class="mr-2 group-hover:rotate-180 transition-transform">🔄</span>
+                                <span>Retry Payment</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -150,7 +285,10 @@
     let orderData = {};
     let finalAmount = 0;
     let paymentProcessing = false;
+    let paymentAttempts = 0;
+    const MAX_PAYMENT_ATTEMPTS = 3;
     let currentRazorpayInstance = null;
+    let orderSuccessData = null;
     
     // LOAD ORDER DATA
     function loadOrderData() {
@@ -161,7 +299,9 @@
             
             if (cart.length === 0) {
                 alert("Your cart is empty. Redirecting to menu...");
-                setTimeout(() => window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/', 2000);
+                setTimeout(() => {
+                    window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+                }, 2000);
                 return false;
             }
             
@@ -171,7 +311,8 @@
             cart.forEach(item => {
                 const unitPrice = parseFloat(item.unitPrice) || 0;
                 const quantity = parseInt(item.quantity) || 1;
-                foodTotal += unitPrice * quantity;
+                const itemTotal = unitPrice * quantity;
+                foodTotal += itemTotal || 0;
             });
             
             if (foodTotal <= 0) {
@@ -211,9 +352,16 @@
                 address, 
                 delivery, 
                 amount: finalAmount,
-                totals: { foodTotal, gstFood, deliveryCharge, gstDelivery, deliveryMode }
+                totals: {
+                    foodTotal,
+                    gstFood,
+                    deliveryCharge,
+                    gstDelivery,
+                    deliveryMode
+                }
             };
             
+            console.log("Order data loaded successfully");
             return true;
             
         } catch (error) {
@@ -233,9 +381,8 @@
             document.getElementById('gst-delivery').textContent = deliveryCharge === 9 ? '₹0.00 (Included)' : `₹${gstDelivery.toFixed(2)}`;
         }
         
-        const totalDisplay = `₹${finalAmount.toFixed(2)}`;
-        document.getElementById('final-total').textContent = totalDisplay;
-        document.getElementById('payment-amount').textContent = totalDisplay;
+        document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
+        document.getElementById('payment-amount').textContent = `₹${finalAmount.toFixed(2)}`;
         document.getElementById('pay-amount').textContent = finalAmount.toFixed(2);
     }
     
@@ -245,22 +392,31 @@
         if (!orderItems) return;
         
         orderItems.innerHTML = '';
+        
+        if (cart.length === 0) {
+            orderItems.innerHTML = '<p class="text-gray-500 text-center py-4">No items in cart</p>';
+            return;
+        }
+        
         cart.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100';
+            
             const quantity = parseInt(item.quantity) || 1;
             const unitPrice = parseFloat(item.unitPrice) || 0;
             const totalPrice = unitPrice * quantity;
             
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'flex justify-between items-center p-4 bg-gray-50 rounded-xl';
             itemDiv.innerHTML = `
                 <div class="flex-1">
-                    <p class="font-semibold text-gray-800">${item.name || 'Food Item'}</p>
-                    <div class="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                        <span>Qty: ${quantity}</span>
-                        <span>Pack: ${item.pack || 'Family'}</span>
+                    <p class="font-semibold text-gray-800 text-lg">${item.name || 'Food Item'}</p>
+                    <div class="flex items-center gap-4 mt-2">
+                        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">Qty: ${quantity}</span>
+                        <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">Pack: ${item.pack || 'Family'}</span>
                     </div>
+                    <p class="text-sm text-gray-600 mt-2">₹${unitPrice.toFixed(2)} × ${quantity}</p>
                 </div>
                 <div class="text-right">
+                    <div class="text-xs text-gray-500 mb-1">Price</div>
                     <div class="text-lg font-bold text-gray-800">₹${totalPrice.toFixed(2)}</div>
                 </div>
             `;
@@ -272,83 +428,239 @@
         const customerDetails = document.getElementById('customer-details');
         if (!customerDetails) return;
         
-        if (!address || !address.name) {
-            customerDetails.innerHTML = `<p class="text-red-600">Customer details not found</p>`;
+        customerDetails.innerHTML = '';
+        
+        if (!address || Object.keys(address).length === 0) {
+            customerDetails.innerHTML = `
+                <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl">
+                    <p class="font-medium">⚠️ Customer details not found</p>
+                    <p class="text-sm mt-1">Please go back to address page and enter details</p>
+                </div>
+            `;
             return;
         }
         
-        customerDetails.innerHTML = `
+        let detailsHTML = `
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p class="font-semibold">${address.name}</p>
-                <p class="text-sm text-gray-600 mt-1">${address.phone || 'Phone not provided'}</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        `;
+        
+        if (address.name) {
+            detailsHTML += `
+                <div class="flex items-start">
+                    <span class="text-blue-600 mr-2 text-xl">👤</span>
+                    <div>
+                        <div class="text-sm text-blue-500">Name</div>
+                        <div class="font-semibold text-gray-800">${address.name}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (address.phone) {
+            detailsHTML += `
+                <div class="flex items-start">
+                    <span class="text-blue-600 mr-2 text-xl">📱</span>
+                    <div>
+                        <div class="text-sm text-blue-500">Phone</div>
+                        <div class="font-semibold text-gray-800">${address.phone}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (address.deliveryMode) {
+            const modeText = address.deliveryMode === 'delivery' ? 'Home Delivery' : 'Takeaway';
+            const modeIcon = address.deliveryMode === 'delivery' ? '🛵' : '🏪';
+            detailsHTML += `
+                <div class="flex items-start md:col-span-2">
+                    <span class="text-blue-600 mr-2 text-xl">${modeIcon}</span>
+                    <div>
+                        <div class="text-sm text-blue-500">Order Type</div>
+                        <div class="font-semibold text-gray-800">${modeText}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        detailsHTML += `
+                </div>
             </div>
         `;
+        
+        customerDetails.innerHTML = detailsHTML;
     }
     
     function displayDeliveryAddress(address, delivery) {
         const deliveryAddress = document.getElementById('delivery-address');
         if (!deliveryAddress) return;
         
+        deliveryAddress.innerHTML = '';
+        
         const deliveryMode = address.deliveryMode || delivery.mode || 'takeaway';
         
         if (deliveryMode === 'delivery') {
+            let addressHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div class="flex items-center mb-3">
+                        <span class="text-green-600 mr-2 text-xl">📍</span>
+                        <span class="font-semibold text-gray-800">Delivery Address</span>
+                    </div>
+            `;
+            
             if (address.houseNumber || address.locality) {
                 const addressLine1 = `${address.houseNumber || ''}${address.houseNumber && address.locality ? ', ' : ''}${address.locality || ''}`;
+                const addressLine2 = address.street ? address.street : '';
                 const cityLine = `${address.city || 'Indore'}, ${address.state || 'MP'} - ${address.pincode || ''}`;
                 
-                deliveryAddress.innerHTML = `
-                    <div class="bg-green-50 border border-green-200 rounded-xl p-4">
-                        <p class="font-semibold mb-2">Delivery Address</p>
-                        <p class="text-gray-700">${addressLine1}</p>
-                        <p class="text-gray-700">${address.street || ''}</p>
-                        <p class="text-gray-700">${cityLine}</p>
+                if (addressLine1.trim()) {
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Address</div>
+                        <div class="font-medium text-gray-800">${addressLine1}</div>
+                    </div>`;
+                }
+                
+                if (addressLine2) {
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Street/Landmark</div>
+                        <div class="font-medium text-gray-800">${addressLine2}</div>
+                    </div>`;
+                }
+                
+                addressHTML += `<div class="mb-2">
+                    <div class="text-sm text-gray-600 mb-1">City & Pincode</div>
+                    <div class="font-medium text-gray-800">${cityLine}</div>
+                </div>`;
+                
+                if (address.addressType) {
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Address Type</div>
+                        <div class="font-medium text-gray-800">${address.addressType}</div>
+                    </div>`;
+                }
+                
+                if (delivery.distance) {
+                    addressHTML += `<div class="mb-2">
+                        <div class="text-sm text-gray-600 mb-1">Distance</div>
+                        <div class="font-medium text-gray-800">${delivery.distance} km from restaurant</div>
+                    </div>`;
+                }
+            } else {
+                addressHTML = `
+                    <div class="text-center py-4">
+                        <p class="text-red-500 font-medium">⚠️ Address details incomplete</p>
+                        <p class="text-sm text-gray-600 mt-1">Please update address details</p>
                     </div>
                 `;
-            } else {
-                deliveryAddress.innerHTML = `<p class="text-red-600">Address details incomplete</p>`;
             }
+            
+            addressHTML += `</div>`;
+            deliveryAddress.innerHTML = addressHTML;
+            
         } else {
             deliveryAddress.innerHTML = `
                 <div class="bg-purple-50 border border-purple-200 rounded-xl p-4">
-                    <p class="font-semibold mb-2">Pickup Details</p>
-                    <p class="text-gray-700">Prime Square, Omaxe City 1, Indore</p>
-                    <p class="text-sm text-gray-600 mt-2">Timings: 6:00 PM - 10:00 PM</p>
+                    <div class="flex items-center mb-3">
+                        <span class="text-purple-600 mr-2 text-xl">🏪</span>
+                        <span class="font-semibold text-gray-800">Pickup Details</span>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <div class="text-sm text-gray-600 mb-1">Pickup Location</div>
+                            <div class="font-medium text-gray-800">Prime Square, Omaxe City 1, Indore</div>
+                        </div>
+                        
+                        <div>
+                            <div class="text-sm text-gray-600 mb-1">Pickup Timings</div>
+                            <div class="font-medium text-gray-800">6:00 PM - 10:00 PM</div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
     }
     
-    // RAZORPAY PAYMENT WITH UPI FIX
+    // GET USER ADDRESS FOR WHATSAPP
+    function getUserAddressForWhatsApp() {
+        try {
+            const addressData = JSON.parse(localStorage.getItem('easygo-address') || '{}');
+            const deliveryData = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
+            
+            if (!addressData || !addressData.name) {
+                return "No address data available";
+            }
+            
+            const deliveryMode = addressData.deliveryMode || deliveryData.mode || 'takeaway';
+            
+            let addressText = "";
+            
+            if (deliveryMode === 'delivery') {
+                const addressParts = [];
+                if (addressData.houseNumber) addressParts.push(addressData.houseNumber);
+                if (addressData.floorNumber) addressParts.push(`Floor ${addressData.floorNumber}`);
+                if (addressData.street) addressParts.push(addressData.street);
+                if (addressData.locality) addressParts.push(addressData.locality);
+                if (addressData.city) addressParts.push(addressData.city);
+                if (addressData.state) addressParts.push(addressData.state);
+                if (addressData.pincode) addressParts.push(addressData.pincode);
+                
+                const fullAddress = addressParts.join(', ');
+                
+                addressText += `*📍 DELIVERY ADDRESS:*%0A`;
+                addressText += `━━━━━━━━━━━━━━━━━━%0A`;
+                addressText += `${fullAddress}%0A`;
+                
+                if (addressData.addressType) {
+                    addressText += `Type: ${addressData.addressType}%0A`;
+                }
+                
+                if (deliveryData.distance) {
+                    addressText += `Distance: ${deliveryData.distance} km from restaurant%0A`;
+                }
+                
+                const googleAddress = encodeURIComponent(fullAddress);
+                addressText += `📍 Maps: https://maps.google.com/?q=${googleAddress}%0A`;
+            } else {
+                addressText += `*🏪 PICKUP DETAILS:*%0A`;
+                addressText += `━━━━━━━━━━━━━━━━━━%0A`;
+                addressText += `Prime Square, Omaxe City 1, Indore%0A`;
+                addressText += `📍 Maps: https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8%0A`;
+                addressText += `Timings: 6:00 PM - 10:00 PM%0A`;
+                addressText += `Customer: ${addressData.name}%0A`;
+                addressText += `Phone: ${addressData.phone || 'N/A'}%0A`;
+                addressText += `📋 OTP verification required at pickup%0A`;
+            }
+            
+            return addressText;
+            
+        } catch (error) {
+            console.error("Error extracting address:", error);
+            return "Address extraction failed";
+        }
+    }
+    
+    // RAZORPAY PAYMENT
     function initiateRazorpayPayment() {
         if (paymentProcessing) {
             alert("A payment is already in progress. Please wait.");
             return;
         }
         
-        if (!orderData.address?.phone) {
-            alert("Please add your phone number for payment verification");
+        if (!validatePaymentPrerequisites()) {
             return;
         }
         
-        if (finalAmount < 1) {
-            alert("Invalid payment amount. Please refresh page.");
-            return;
-        }
-        
+        paymentAttempts++;
+        showLoading("Initializing secure payment...");
         paymentProcessing = true;
-        showLoading("Opening payment gateway...");
-        
-        // Force payment in browser context (not in-app browser)
-        if (window.inAppBrowserDetected) {
-            alert("For best payment experience, please open in Chrome/Safari browser instead of Instagram/Facebook app.");
-        }
         
         const options = {
             key: RAZORPAY_KEY_ID,
             amount: Math.round(finalAmount * 100),
             currency: "INR",
             name: "Easy Go",
-            description: "Order Payment",
+            description: `Order Payment - ${orderData.address.name || 'Customer'}`,
             prefill: {
                 name: orderData.address.name || "Customer",
                 contact: orderData.address.phone || "",
@@ -358,23 +670,26 @@
                 handlePaymentSuccess(response);
             },
             theme: { 
-                color: "#10B981"
+                color: "#10B981",
+                hide_topbar: false
             },
             modal: {
                 ondismiss: function() {
                     handlePaymentDismiss();
                 },
-                // Allow backdrop close to prevent trapping users
-                backdropclose: true
+                animation: true,
+                backdropclose: false
             },
-            // Add timeout to prevent hanging
-            timeout: 300,
-            // Enable retry for failed payments
             retry: {
                 enabled: true,
                 max_count: 2
             },
-            // Important for UPI: Use external browser intent
+            timeout: 300,
+            remember_customer: true,
+            notes: {
+                order_type: orderData.totals.deliveryMode,
+                items_count: orderData.cart.length.toString()
+            },
             external: {
                 wallets: ['paytm', 'phonepe', 'gpay', 'bhim'],
                 UPI: true
@@ -396,11 +711,28 @@
             rzp.open();
             
         } catch (error) {
-            console.error("Payment initialization error:", error);
-            hideLoading();
-            paymentProcessing = false;
-            alert("Unable to initialize payment. Please check your internet connection and try again.");
+            console.error("Razorpay initialization error:", error);
+            handleRazorpayError(error);
         }
+    }
+    
+    function validatePaymentPrerequisites() {
+        if (!orderData.address?.phone) {
+            alert("Please add your phone number for payment verification");
+            return false;
+        }
+        
+        if (finalAmount < 1) {
+            alert("Invalid payment amount. Please refresh page.");
+            return false;
+        }
+        
+        if (paymentAttempts >= MAX_PAYMENT_ATTEMPTS) {
+            alert("Maximum payment attempts reached. Please contact support.");
+            return false;
+        }
+        
+        return true;
     }
     
     function handlePaymentSuccess(response) {
@@ -408,214 +740,285 @@
         paymentProcessing = false;
         
         if (!response.razorpay_payment_id) {
-            alert("Payment completed but verification failed. Please contact support with your transaction ID.");
+            alert("Payment completed but no payment ID received. Please contact support.");
             return;
         }
         
+        processPaymentSuccess(response.razorpay_payment_id);
+    }
+    
+    function processPaymentSuccess(paymentId) {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const orderId = "EG" + Date.now().toString().slice(-8);
         
         const order = {
             id: orderId,
-            paymentId: response.razorpay_payment_id,
+            paymentId: paymentId,
             otp: otp,
             amount: finalAmount,
             customer: orderData.address.name || 'Customer',
             phone: orderData.address.phone || '',
-            items: orderData.cart,
+            items: orderData.cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                pack: item.pack,
+                unitPrice: parseFloat(item.unitPrice) || 0,
+                total: parseFloat(item.total) || parseFloat(item.totalPrice) || 0
+            })),
             deliveryMode: orderData.totals.deliveryMode,
-            timestamp: new Date().toISOString()
+            totals: orderData.totals,
+            address: orderData.address,
+            delivery: orderData.delivery,
+            timestamp: new Date().toISOString(),
+            paymentMethod: "razorpay",
+            status: "pending"
         };
         
-        saveOrder(order);
-        sendWhatsAppNotification(order);
+        orderSuccessData = order;
+        
+        saveOrderAndProceed(order, otp);
+        sendOrderToWhatsApp(order);
         
         document.getElementById('generated-otp').textContent = otp;
         document.getElementById('success-modal').classList.remove('hidden');
+        
+        // Auto redirect to tracking after 5 seconds
+        setTimeout(() => {
+            window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
+        }, 5000);
     }
     
     function handlePaymentFailure(response) {
+        console.error("Payment failed:", response);
         hideLoading();
         paymentProcessing = false;
         
-        let errorMsg = "Payment failed. Please try again.";
-        if (response.error && response.error.description) {
-            errorMsg = response.error.description;
-        }
+        let errorMsg = response.error.description || "Payment failed. Please try again.";
         
-        alert(errorMsg);
+        document.getElementById('failed-message').textContent = "Payment Failed";
+        document.getElementById('failed-details').textContent = errorMsg;
+        document.getElementById('failed-modal').classList.remove('hidden');
         
-        // Store payment failure for analytics
-        try {
-            const failures = JSON.parse(localStorage.getItem('easygo-payment-failures') || '[]');
-            failures.push({
-                timestamp: new Date().toISOString(),
-                error: response.error,
-                amount: finalAmount
-            });
-            localStorage.setItem('easygo-payment-failures', JSON.stringify(failures));
-        } catch (e) {
-            console.error("Failed to save payment failure:", e);
-        }
+        document.getElementById('retry-payment').classList.remove('hidden');
     }
     
     function handlePaymentError(response) {
+        console.error("Payment error:", response);
         hideLoading();
         paymentProcessing = false;
         
-        console.error("Payment error:", response);
-        alert("A payment error occurred. Please try again or use a different payment method.");
+        document.getElementById('failed-message').textContent = "Payment Error";
+        document.getElementById('failed-details').textContent = "An error occurred during payment processing. Please try again.";
+        document.getElementById('failed-modal').classList.remove('hidden');
+        
+        document.getElementById('retry-payment').classList.remove('hidden');
     }
     
     function handlePaymentDismiss() {
         hideLoading();
         paymentProcessing = false;
         
-        // Check if payment might have been successful despite dismissal
-        checkForPendingPayment();
+        document.getElementById('retry-payment').classList.remove('hidden');
     }
     
-    function checkForPendingPayment() {
-        // Sometimes UPI payments succeed but callback fails
-        setTimeout(() => {
-            alert("If payment was deducted but order not confirmed, please contact us at +91 76518 37322 with your transaction ID for manual verification.");
-        }, 2000);
+    function handleRazorpayError(error) {
+        console.error("Razorpay error:", error);
+        hideLoading();
+        paymentProcessing = false;
+        
+        document.getElementById('failed-message').textContent = "Connection Error";
+        document.getElementById('failed-details').textContent = "Unable to connect to payment gateway. Please check your internet connection.";
+        document.getElementById('failed-modal').classList.remove('hidden');
+        
+        document.getElementById('retry-payment').classList.remove('hidden');
     }
     
-    function showLoading(message) {
+    function showLoading(message = "Connecting to payment gateway...") {
         document.getElementById('loading-message').textContent = message;
         document.getElementById('loading-modal').classList.remove('hidden');
         document.getElementById('razorpay-pay-btn').disabled = true;
+        
+        let progress = 30;
+        const progressBar = document.getElementById('progress-bar');
+        const interval = setInterval(() => {
+            progress += 5;
+            if (progress > 90) progress = 90;
+            progressBar.style.width = progress + '%';
+        }, 1000);
+        
+        window.loadingInterval = interval;
     }
     
     function hideLoading() {
         document.getElementById('loading-modal').classList.add('hidden');
         document.getElementById('razorpay-pay-btn').disabled = false;
+        
+        if (window.loadingInterval) {
+            clearInterval(window.loadingInterval);
+        }
+        document.getElementById('progress-bar').style.width = '30%';
     }
     
-    // ADDRESS EXTRACTION AND WHATSAPP NOTIFICATION
-    function extractUserAddress() {
-        try {
-            const addressData = JSON.parse(localStorage.getItem('easygo-address') || '{}');
-            const deliveryData = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
+    // WHATSAPP NOTIFICATION
+    function sendOrderToWhatsApp(order) {
+        let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
+        
+        message += `*Order ID:* ${order.id}%0A`;
+        message += `*OTP:* ${order.otp}%0A`;
+        message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
+        message += `*Payment ID:* ${order.paymentId}%0A`;
+        message += `*Status:* CONFIRMED ✅%0A%0A`;
+        
+        message += `*ITEMS ORDERED:*%0A`;
+        message += `━━━━━━━━━━━━━━━━━━%0A`;
+        order.items.forEach(item => {
+            const quantity = parseInt(item.quantity) || 1;
+            const unitPrice = parseFloat(item.unitPrice) || 0;
+            const totalPrice = parseFloat(item.total) || (unitPrice * quantity);
             
-            if (!addressData.name) return "No address data";
-            
-            let addressText = "";
-            addressText += `Name: ${addressData.name}\n`;
-            addressText += `Phone: ${addressData.phone || 'Not provided'}\n`;
-            
-            const deliveryMode = addressData.deliveryMode || deliveryData.mode || 'takeaway';
-            addressText += `Type: ${deliveryMode === 'delivery' ? 'Home Delivery' : 'Takeaway'}\n`;
-            
-            if (deliveryMode === 'delivery') {
-                if (addressData.houseNumber || addressData.locality) {
-                    addressText += `Address: ${addressData.houseNumber || ''}${addressData.houseNumber && addressData.locality ? ', ' : ''}${addressData.locality || ''}\n`;
-                    if (addressData.street) addressText += `Street: ${addressData.street}\n`;
-                    addressText += `City: ${addressData.city || 'Indore'}\n`;
-                    addressText += `Pincode: ${addressData.pincode || ''}\n`;
-                }
-                
-                if (deliveryData.distance) {
-                    addressText += `Distance: ${deliveryData.distance} km\n`;
-                }
-            } else {
-                addressText += `Pickup: Prime Square, Omaxe City 1, Indore\n`;
+            message += `• ${item.name} × ${quantity}%0A`;
+            message += `  Pack: ${item.pack || 'Standard'}%0A`;
+            message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}%0A%0A`;
+        });
+        
+        message += `*PAYMENT BREAKDOWN:*%0A`;
+        message += `━━━━━━━━━━━━━━━━━━%0A`;
+        message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
+        
+        if (order.totals?.gstFood > 0) {
+            message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
+        }
+        
+        if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
+            message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
+            if (order.totals?.deliveryCharge === 9) {
+                message += `GST on Delivery: Included in ₹9%0A`;
+            } else if (order.totals?.gstDelivery > 0) {
+                message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
             }
-            
-            return addressText;
-        } catch (error) {
-            console.error("Error extracting address:", error);
-            return "Address extraction failed";
+        }
+        
+        message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
+        
+        message += `*CUSTOMER DETAILS:*%0A`;
+        message += `━━━━━━━━━━━━━━━━━━%0A`;
+        message += `👤 Name: ${order.customer || 'N/A'}%0A`;
+        message += `📱 Phone: ${order.phone || 'N/A'}%0A`;
+        message += `💳 Payment: Razorpay (Online)%0A%0A`;
+        
+        // Add address from the dedicated function
+        const addressMessage = getUserAddressForWhatsApp();
+        message += addressMessage;
+        
+        message += `%0A*📅 ORDER TIME:*%0A`;
+        message += `━━━━━━━━━━━━━━━━━━%0A`;
+        message += `⏰ ${new Date().toLocaleTimeString()}%0A`;
+        message += `📅 ${new Date().toLocaleDateString()}%0A%0A`;
+        
+        message += `_Order placed via EasyGo Payment System_`;
+        
+        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${message}`;
+        
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            window.location.href = whatsappURL;
+        } else {
+            window.open(whatsappURL, '_blank');
         }
     }
     
-    function sendWhatsAppNotification(order) {
-        let message = `📦 *NEW ORDER - ${order.id}* 📦\n\n`;
-        
-        message += `*Customer:* ${order.customer}\n`;
-        message += `*Phone:* ${order.phone}\n`;
-        message += `*OTP:* ${order.otp}\n`;
-        message += `*Amount:* ₹${order.amount.toFixed(2)}\n`;
-        message += `*Payment ID:* ${order.paymentId}\n`;
-        message += `*Type:* ${order.deliveryMode === 'delivery' ? 'Home Delivery' : 'Takeaway'}\n\n`;
-        
-        message += `*Items:*\n`;
-        order.items.forEach(item => {
-            const qty = parseInt(item.quantity) || 1;
-            const price = parseFloat(item.unitPrice) || 0;
-            message += `• ${item.name} × ${qty} - ₹${(price * qty).toFixed(2)}\n`;
-        });
-        
-        message += `\n`;
-        message += extractUserAddress();
-        message += `\n\n*Order Time:* ${new Date().toLocaleTimeString()}, ${new Date().toLocaleDateString()}`;
-        
-        const encodedMessage = encodeURIComponent(message);
-        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${encodedMessage}`;
-        
-        // Open WhatsApp after a short delay
-        setTimeout(() => {
-            window.open(whatsappURL, '_blank');
-        }, 1500);
-    }
-    
-    function saveOrder(order) {
+    // SAVE ORDER FOR FUTURE PAGES
+    function saveOrderAndProceed(order, otp) {
         try {
-            const orderRecord = {
-                ...order,
-                address: orderData.address,
-                delivery: orderData.delivery
+            // Save to easygo-orders (all orders history)
+            let orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
+            orders.push(order);
+            localStorage.setItem('easygo-orders', JSON.stringify(orders));
+            
+            // Save to easygo-active-orders (current active orders)
+            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+            const activeOrder = {
+                orderId: order.id,
+                razorpayPaymentId: order.paymentId,
+                customerName: order.customer,
+                customerPhone: order.phone,
+                totalAmount: order.amount,
+                items: order.items.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    pack: item.pack,
+                    unitPrice: item.unitPrice,
+                    total: item.total
+                })),
+                address: order.deliveryMode === 'delivery' ? 
+                    `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
+                    "Takeaway - Prime Square, Omaxe City 1, Indore",
+                deliveryMode: order.deliveryMode,
+                status: 'pending',
+                timestamp: order.timestamp,
+                paymentMethod: order.paymentMethod,
+                paymentId: order.paymentId,
+                otp: otp,
+                deliveryPartner: "Nishant",
+                deliveryPartnerPhone: "+917651837322",
+                // Store complete address object for tracking page
+                completeAddress: order.address,
+                deliveryDetails: order.delivery,
+                orderSummary: order.totals
             };
+            activeOrders.push(activeOrder);
+            localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
             
-            localStorage.setItem('easygo-orders', JSON.stringify([orderRecord]));
-            localStorage.setItem('easygo-otp', order.otp);
+            // Save individual values for easy access
+            localStorage.setItem('easygo-otp', otp);
             localStorage.setItem('easygo-order-id', order.id);
-            localStorage.setItem('easygo-last-order', JSON.stringify(orderRecord));
+            localStorage.setItem('easygo-delivery-mode', order.deliveryMode);
+            localStorage.setItem('easygo-last-order', JSON.stringify(order));
+            localStorage.setItem('easygo-last-payment-id', order.paymentId);
+            localStorage.setItem('easygo-last-payment-amount', order.amount.toString());
             
+            // Clear cart but keep address for future orders
             localStorage.removeItem('easygo-cart');
             localStorage.removeItem('easygo-cart-items-total');
+            localStorage.removeItem('easygo-delivery'); // Clear delivery charges after order
+            
+            // Store payment success for analytics
+            localStorage.setItem('easygo-last-successful-payment', Date.now().toString());
+            
+            console.log("Order saved successfully for tracking page");
             
         } catch (error) {
             console.error("Error saving order:", error);
         }
     }
     
-    // DETECT IN-APP BROWSER
-    function detectInAppBrowser() {
-        const userAgent = navigator.userAgent.toLowerCase();
-        const isInstagram = userAgent.includes('instagram');
-        const isFacebook = userAgent.includes('fban') || userAgent.includes('fbav');
-        const isTwitter = userAgent.includes('twitter');
-        
-        if (isInstagram || isFacebook || isTwitter) {
-            window.inAppBrowserDetected = true;
-            return true;
-        }
-        return false;
-    }
-    
     // INITIALIZATION
     document.addEventListener('DOMContentLoaded', function() {
-        // Detect in-app browser first
-        if (detectInAppBrowser()) {
-            alert("⚠️ For best payment experience, please open this page in Chrome/Safari browser instead of social media app.");
-        }
+        console.log("Payment page loaded");
         
         if (!loadOrderData()) {
             return;
         }
         
+        setupEventListeners();
+    });
+    
+    function setupEventListeners() {
         document.getElementById('razorpay-pay-btn').addEventListener('click', initiateRazorpayPayment);
+        
+        document.getElementById('retry-payment').addEventListener('click', function() {
+            this.classList.add('hidden');
+            initiateRazorpayPayment();
+        });
+        
+        document.getElementById('retry-payment-modal').addEventListener('click', function() {
+            document.getElementById('failed-modal').classList.add('hidden');
+            initiateRazorpayPayment();
+        });
+        
         document.getElementById('go-to-tracking').addEventListener('click', function() {
             window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
         });
-        
-        // Add browser compatibility warning
-        if (!window.inAppBrowserDetected && /android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
-            console.log("Mobile browser detected - payment should work properly");
-        }
-    });
+    }
 </script>
     
 </body>
