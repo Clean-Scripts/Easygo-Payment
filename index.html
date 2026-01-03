@@ -3,26 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/Easygo-Address/refs/heads/main/logo.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    <title>Easy Go | Secure Payment</title>
+    <title>Easy Go | Payment</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        
+        .payment-step { transition: all 0.3s; }
+        .payment-step.active { border-color: #10b981; background-color: #f0fdf4; }
         .razorpay-payment-button { display: none !important; }
-        
-        .payment-success {
-            animation: successPulse 2s infinite;
+        .error-message { 
+            display: none;
+            animation: fadeIn 0.3s ease-in;
         }
-        
-        @keyframes successPulse {
-            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-            70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #10b981;
@@ -31,168 +29,95 @@
             height: 50px;
             animation: spin 1s linear infinite;
         }
-        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
         
-        .fade-in {
-            animation: fadeIn 0.3s ease-in;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        /* WhatsApp notification styles */
-        .whatsapp-notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #25D366;
+        /* Extended loading message */
+        .extended-wait-message {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 12px 20px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 1000;
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: center;
+            animation: pulse 2s infinite;
         }
         
-        .modal-overlay {
-            animation: fadeIn 0.3s ease-out;
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
         }
     </style>
 </head>
-<body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+<body class="antialiased bg-gray-50">
 
-    <!-- Loading Modal -->
-    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
-            <div class="text-center">
-                <div class="loader mx-auto mb-6"></div>
-                <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
-                <p class="text-gray-600 mb-6" id="loading-message">Connecting to payment gateway...</p>
-                <div class="space-y-2">
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div id="progress-bar" class="bg-green-500 h-2 rounded-full" style="width: 30%"></div>
-                    </div>
-                    <p class="text-sm text-gray-500">Do not close this window</p>
+    <header class="relative mb-8">
+        <div class="h-40 overflow-hidden">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/Banner.png" 
+                 class="w-full h-full object-cover" alt="Easy Go Banner">
+        </div>
+        <div class="absolute -bottom-6 left-0 right-0 flex justify-center">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                 class="h-20 w-20 rounded-full border-4 border-white shadow-xl bg-white p-1">
+        </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto px-4 pt-10 pb-20">
+        <!-- Error Message -->
+        <div id="error-message" class="error-message fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-lg z-50 max-w-md">
+            <div class="flex items-center">
+                <div class="text-2xl mr-3">⚠️</div>
+                <div>
+                    <h4 class="font-bold">Payment Error</h4>
+                    <p id="error-text" class="text-sm mt-1"></p>
                 </div>
+                <button onclick="hideError()" class="ml-6 text-red-500 hover:text-red-700">✕</button>
             </div>
         </div>
-    </div>
 
-    <!-- Success Modal -->
-    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
-            <div class="text-center">
-                <div class="text-6xl mb-6">🎉</div>
-                <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
-                <p class="text-gray-600 mb-6">Your order has been confirmed. Please save this OTP:</p>
-                
-                <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl payment-success" id="generated-otp">
-                    XXX XXX
-                </div>
-                
-                <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
-                    <p class="text-sm text-green-800">
-                        <strong>Next steps:</strong> Share this OTP with delivery partner for verification.
-                    </p>
-                </div>
-                
-                <p class="text-sm text-gray-500 mb-6">
-                    Order details have been sent to restaurant. Redirecting to tracking...
-                </p>
-                
-                <button id="go-to-tracking" 
-                        class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg hover:shadow-xl">
-                    Track Your Order →
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Payment Failed Modal -->
-    <div id="failed-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
-            <div class="text-center">
-                <div class="text-6xl mb-6">❌</div>
-                <h3 class="text-2xl font-bold mb-4">Payment Failed</h3>
-                <p class="text-gray-600 mb-6" id="failed-message">Payment could not be processed.</p>
-                
-                <div class="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
-                    <p class="text-red-800 mb-3" id="failed-details"></p>
-                    <p class="text-sm text-red-700">
-                        <strong>Don't worry!</strong> If amount was deducted but order not confirmed, your refund will be processed within 24-48 working hours.
-                    </p>
-                </div>
-                
-                <div class="space-y-4">
-                    <button id="retry-payment-modal" 
-                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg">
-                        Try Payment Again
-                    </button>
-                    
-                    <button onclick="document.getElementById('failed-modal').classList.add('hidden')" 
-                            class="w-full py-3 bg-gray-200 text-gray-800 rounded-2xl hover:bg-gray-300">
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="max-w-7xl mx-auto px-4 pt-10 pb-20">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Order Summary -->
-            <div class="space-y-8">
-                <div class="bg-white rounded-3xl shadow-xl p-8">
-                    <h2 class="text-2xl font-bold mb-6 flex items-center">
-                        <span class="mr-3">📦</span>
-                        Order Summary
-                    </h2>
+            <div>
+                <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
+                    <h2 class="text-2xl font-bold mb-6">📦 Order Summary</h2>
                     
-                    <div id="order-items" class="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
+                    <div id="order-items" class="space-y-4 mb-6">
                         <!-- Items loaded from localStorage -->
                     </div>
                     
                     <div class="border-t pt-6">
-                        <h3 class="font-bold mb-4 flex items-center">
-                            <span class="mr-2">👤</span>
-                            Customer Details
-                        </h3>
+                        <h3 class="font-bold mb-4">👤 Customer Details</h3>
                         <div id="customer-details" class="space-y-2">
                             <!-- Details loaded from localStorage -->
                         </div>
                     </div>
-                </div>
-                
-                <div class="bg-white rounded-3xl shadow-xl p-8">
-                    <h3 class="font-bold mb-4 flex items-center">
-                        <span class="mr-2">📍</span>
-                        Order Details
-                    </h3>
-                    <div id="delivery-address" class="space-y-2">
-                        <!-- Address loaded from localStorage -->
+                    
+                    <div class="border-t pt-6">
+                        <h3 class="font-bold mb-4">📍 Order Details</h3>
+                        <div id="delivery-address" class="space-y-2">
+                            <!-- Address loaded from localStorage -->
+                        </div>
                     </div>
                 </div>
             </div>
             
             <!-- Payment Section -->
-            <div class="space-y-8">
-                <div class="bg-white rounded-3xl shadow-xl p-8">
-                    <h2 class="text-2xl font-bold mb-6 flex items-center">
-                        <span class="mr-3">💰</span>
-                        Payment Summary
-                    </h2>
+            <div>
+                <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
+                    <h2 class="text-2xl font-bold mb-6">💰 Payment Summary</h2>
                     
                     <div class="space-y-4 mb-6">
                         <div class="flex justify-between py-2">
                             <span class="text-gray-700">Food Items Total</span>
                             <span id="food-total" class="font-semibold">₹0</span>
+                        </div>
+                        
+                        <div id="coupon-row" class="flex justify-between text-green-600 py-2 hidden">
+                            <span>Coupon Discount</span>
+                            <span id="coupon-discount" class="font-semibold">-₹0</span>
                         </div>
                         
                         <div class="flex justify-between py-2">
@@ -206,7 +131,7 @@
                                 <span id="delivery-charge" class="font-semibold">₹0</span>
                             </div>
                             <div class="flex justify-between py-2">
-                                <span class="text-gray-700">GST on Delivery</span>
+                                <span class="text-gray-700">GST on Delivery (18%)</span>
                                 <span id="gst-delivery" class="font-semibold">₹0</span>
                             </div>
                         </div>
@@ -218,55 +143,60 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="mt-6 pt-6 border-t">
+                        <p class="text-sm text-gray-600">
+                            <span class="font-medium">Note:</span> All prices include applicable taxes. Payment breakdown is shown for transparency.
+                        </p>
+                    </div>
                 </div>
                 
                 <!-- Payment Options -->
-                <div class="bg-white rounded-3xl shadow-xl p-8">
+                <div class="bg-white rounded-3xl shadow-lg p-8">
                     <div class="text-center mb-8">
-                        <div class="inline-block bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 text-green-800 px-8 py-4 rounded-2xl mb-4">
-                            <div class="text-sm font-medium mb-1">Total to pay</div>
-                            <span class="font-bold text-3xl" id="payment-amount">₹0</span>
+                        <div class="inline-block bg-green-50 text-green-700 px-6 py-3 rounded-2xl mb-4">
+                            <span class="font-bold text-lg" id="payment-amount">₹0</span>
+                            <span class="text-gray-600 ml-2">to pay</span>
                         </div>
-                        <p class="text-gray-600">100% Secure Payment via Razorpay</p>
+                        <p class="text-gray-600">Secure & hassle-free payment</p>
                     </div>
+                    
+                    <h2 class="text-2xl font-bold mb-6">💳 Payment Method</h2>
                     
                     <div class="space-y-4 mb-8">
                         <button id="razorpay-pay-btn" 
-                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none">
-                            <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl">
+                            <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
                                 <path d="M2.5 12.406h19v9h-19z"/>
                             </svg>
                             Pay Now - ₹<span id="pay-amount">0</span>
                         </button>
                         
-                        <div class="text-center pt-4">
-                            <div class="inline-flex items-center justify-center space-x-3 text-sm text-gray-600 bg-gray-50 px-6 py-3 rounded-full">
-                                <span class="flex items-center">
-                                    <span class="text-green-500 mr-1">✓</span>
-                                    Secure
-                                </span>
-                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
-                                <span>Cards</span>
-                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
-                                <span>UPI</span>
-                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
-                                <span>NetBanking</span>
+                        <div class="text-center">
+                            <div class="inline-flex items-center justify-center space-x-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-full">
+                                <span>🔒 Secure</span>
+                                <span>•</span>
+                                <span>💳 Cards</span>
+                                <span>•</span>
+                                <span>📱 UPI</span>
+                                <span>•</span>
+                                <span>🏦 NetBanking</span>
                             </div>
-                            <p class="text-xs text-gray-500 mt-3">Powered by Razorpay | PCI DSS Certified</p>
+                            <p class="text-xs text-gray-500 mt-2">Powered by Razorpay</p>
                         </div>
                     </div>
                     
                     <div class="space-y-4 pt-6 border-t">
                         <div class="flex justify-between items-center">
                             <a href="https://clean-scripts.github.io/Easygo-Address/" 
-                               class="text-gray-600 hover:text-gray-900 flex items-center group transition-colors">
-                                <span class="text-xl mr-2 group-hover:-translate-x-1 transition-transform">←</span>
+                               class="text-gray-600 hover:text-gray-900 flex items-center">
+                                <span class="text-xl mr-2">←</span>
                                 <span>Back to Address</span>
                             </a>
                             <button id="retry-payment" 
-                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center group">
-                                <span class="mr-2 group-hover:rotate-180 transition-transform">🔄</span>
+                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center">
+                                <span class="mr-2">🔄</span>
                                 <span>Retry Payment</span>
                             </button>
                         </div>
@@ -276,121 +206,214 @@
         </div>
     </div>
 
+    <!-- Success Modal -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <div class="text-6xl mb-6">🎉</div>
+                <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
+                <p class="text-gray-600 mb-6">Your order has been confirmed. Please save this OTP:</p>
+                
+                <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl" id="generated-otp">
+                    123456
+                </div>
+                
+                <p class="text-sm text-gray-500 mb-6">
+                    Share this OTP with delivery partner for verification.
+                    <br>Redirecting to tracking page...
+                </p>
+                
+                <button id="go-to-tracking" 
+                        class="w-full py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors shadow-lg hover:shadow-xl">
+                    Track Your Order Now →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <div class="loader mx-auto mb-6"></div>
+                <h3 class="text-2xl font-bold mb-4" id="loading-title">Processing Payment</h3>
+                <p class="text-gray-600 mb-6" id="loading-message">Please wait while we connect to Razorpay...</p>
+                
+                <!-- Extended wait message (shown after 30 seconds) -->
+                <div id="extended-wait-message" class="extended-wait-message hidden">
+                    <p class="font-semibold">⏳ Payment is taking longer than usual</p>
+                    <p class="text-sm opacity-90 mt-1">This is normal for UPI payments. Please check your UPI app...</p>
+                </div>
+                
+                <p class="text-sm text-gray-500 mt-4">Do not close this window</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <div class="flex items-center">
+                        <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                             class="h-12 w-12 rounded-full bg-white p-1 mr-3">
+                        <div>
+                            <h2 class="text-xl font-bold">Easy Go</h2>
+                            <p class="text-gray-400 text-sm">Delivering Freshness & Speed !</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center md:text-right">
+                    <p class="text-gray-400 text-sm mb-2">
+                        © 2024 Easy Go | All Rights Reserved
+                    </p>
+                    <div class="mt-4">
+                        <a href="https://clean-scripts.github.io/Easygo-Menu/" class="text-gray-400 hover:text-white text-sm mr-4">View Menu</a>
+                        <a href="https://clean-scripts.github.io/Easygo-Privacy/" class="text-gray-400 hover:text-white text-sm mr-4">Privacy Policy</a>
+                        <a href="https://clean-scripts.github.io/Easygo-Terms/" class="text-gray-400 hover:text-white text-sm">Terms & Conditions</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
 <script>
-    // CONFIGURATION
+    // CONFIG
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
     const RESTAURANT_PHONE = "917651837322";
     
-    // GLOBAL STATE
+    // VARIABLES
     let orderData = {};
     let finalAmount = 0;
     let paymentProcessing = false;
-    let paymentAttempts = 0;
-    const MAX_PAYMENT_ATTEMPTS = 3;
-    let currentRazorpayInstance = null;
-    let orderSuccessData = null;
+    let paymentInProgress = false; // Track if payment is actually in progress
+    let upiTimeout = null;
+    let extendedWaitTimer = null;
     
-    // LOAD ORDER DATA
+    // ERROR HANDLING
+    function showError(message) {
+        document.getElementById('error-text').textContent = message;
+        document.getElementById('error-message').style.display = 'block';
+        setTimeout(() => hideError(), 10000); // Show error for 10 seconds
+    }
+    
+    function hideError() {
+        document.getElementById('error-message').style.display = 'none';
+    }
+    
+    function showLoading() {
+        document.getElementById('loading-modal').classList.remove('hidden');
+        document.getElementById('loading-title').textContent = "Processing Payment";
+        document.getElementById('loading-message').textContent = "Please wait while we connect to Razorpay...";
+        document.getElementById('extended-wait-message').classList.add('hidden');
+        document.getElementById('razorpay-pay-btn').disabled = true;
+    }
+    
+    function hideLoading() {
+        document.getElementById('loading-modal').classList.add('hidden');
+        document.getElementById('razorpay-pay-btn').disabled = false;
+        
+        // Clear any timers
+        if (extendedWaitTimer) {
+            clearTimeout(extendedWaitTimer);
+            extendedWaitTimer = null;
+        }
+    }
+    
+    function showExtendedWaitMessage() {
+        document.getElementById('loading-title').textContent = "Payment In Progress";
+        document.getElementById('loading-message').textContent = "Payment is being processed. This may take up to 2 minutes...";
+        document.getElementById('extended-wait-message').classList.remove('hidden');
+    }
+    
+    // LOAD ORDER DATA AND DISPLAY ON PAGE
     function loadOrderData() {
         try {
+            // Load data
             const cart = JSON.parse(localStorage.getItem('easygo-cart') || '[]');
             const address = JSON.parse(localStorage.getItem('easygo-address') || '{}');
             const delivery = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
             
+            console.log("Loaded from localStorage:", { cart, address, delivery });
+            
             if (cart.length === 0) {
-                alert("Your cart is empty. Redirecting to menu...");
-                setTimeout(() => {
-                    window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
-                }, 2000);
-                return false;
+                showError("Cart is empty!");
+                setTimeout(() => window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/', 2000);
+                return;
             }
             
-            const deliveryMode = address.deliveryMode || delivery.mode || 'takeaway';
-            
-            let foodTotal = 0;
-            cart.forEach(item => {
-                const unitPrice = parseFloat(item.unitPrice) || 0;
-                const quantity = parseInt(item.quantity) || 1;
-                const itemTotal = unitPrice * quantity;
-                foodTotal += itemTotal || 0;
-            });
-            
+            // Calculate total
+            let foodTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
             if (foodTotal <= 0) {
-                foodTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
+                cart.forEach(item => foodTotal += parseFloat(item.total) || 0);
             }
             
-            if (foodTotal <= 0) {
-                alert("Invalid order amount. Please refresh page.");
-                return false;
-            }
-            
-            const gstFood = Math.round((foodTotal * 0.05) * 100) / 100;
+            // Apply GST
+            const gstFood = foodTotal * 0.05;
             let deliveryCharge = 0;
             let gstDelivery = 0;
             
-            if (deliveryMode === 'delivery') {
-                deliveryCharge = parseFloat(delivery.charge) || 49;
+            if ((delivery.mode || 'takeaway') === 'delivery') {
+                deliveryCharge = parseFloat(delivery.charge) || 0;
+                // ₹9 delivery includes GST, no extra GST
                 if (deliveryCharge !== 9) {
-                    gstDelivery = Math.round((deliveryCharge * 0.18) * 100) / 100;
+                    gstDelivery = deliveryCharge * 0.18;
                 }
             }
             
             finalAmount = parseFloat((foodTotal + gstFood + deliveryCharge + gstDelivery).toFixed(2));
             
-            if (finalAmount < 1) {
-                alert("Invalid total amount. Please contact support.");
-                return false;
+            // DISPLAY CART ITEMS ON PAGE
+            displayCartItems(cart);
+            
+            // DISPLAY CUSTOMER DETAILS ON PAGE
+            displayCustomerDetails(address);
+            
+            // DISPLAY DELIVERY ADDRESS ON PAGE
+            displayDeliveryAddress(address, delivery);
+            
+            // Update payment breakdown UI
+            document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
+            document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
+            
+            if (delivery.mode === 'delivery') {
+                document.getElementById('delivery-row').classList.remove('hidden');
+                document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
+                document.getElementById('gst-delivery').textContent = deliveryCharge === 9 ? '₹0.00 (Included)' : `₹${gstDelivery.toFixed(2)}`;
             }
             
-            displayCartItems(cart);
-            displayCustomerDetails(address);
-            displayDeliveryAddress(address, delivery);
-            updatePaymentUI(foodTotal, gstFood, deliveryCharge, gstDelivery, deliveryMode);
+            document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
+            document.getElementById('payment-amount').textContent = `₹${finalAmount.toFixed(2)}`;
+            document.getElementById('pay-amount').textContent = finalAmount.toFixed(2);
             
+            // Store order data with all totals
             orderData = { 
                 cart, 
                 address, 
                 delivery, 
                 amount: finalAmount,
                 totals: {
-                    foodTotal,
-                    gstFood,
-                    deliveryCharge,
-                    gstDelivery,
-                    deliveryMode
+                    foodTotal: foodTotal,
+                    gstFood: gstFood,
+                    deliveryCharge: deliveryCharge,
+                    gstDelivery: gstDelivery,
+                    deliveryMode: delivery.mode || 'takeaway'
                 }
             };
             
-            console.log("Order data loaded successfully");
-            return true;
+            console.log("Order data stored:", orderData);
             
         } catch (error) {
-            console.error("Error loading order data:", error);
-            alert("Failed to load order. Please refresh the page.");
-            return false;
+            console.error("Error:", error);
+            showError("Failed to load order details");
         }
     }
     
-    function updatePaymentUI(foodTotal, gstFood, deliveryCharge, gstDelivery, deliveryMode) {
-        document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
-        document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
-        
-        if (deliveryMode === 'delivery') {
-            document.getElementById('delivery-row').classList.remove('hidden');
-            document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
-            document.getElementById('gst-delivery').textContent = deliveryCharge === 9 ? '₹0.00 (Included)' : `₹${gstDelivery.toFixed(2)}`;
-        }
-        
-        document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
-        document.getElementById('payment-amount').textContent = `₹${finalAmount.toFixed(2)}`;
-        document.getElementById('pay-amount').textContent = finalAmount.toFixed(2);
-    }
-    
-    // DISPLAY FUNCTIONS
+    // DISPLAY CART ITEMS ON PAGE
     function displayCartItems(cart) {
         const orderItems = document.getElementById('order-items');
-        if (!orderItems) return;
-        
         orderItems.innerHTML = '';
         
         if (cart.length === 0) {
@@ -403,8 +426,6 @@
             itemDiv.className = 'flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100';
             
             const quantity = parseInt(item.quantity) || 1;
-            const unitPrice = parseFloat(item.unitPrice) || 0;
-            const totalPrice = unitPrice * quantity;
             
             itemDiv.innerHTML = `
                 <div class="flex-1">
@@ -413,21 +434,37 @@
                         <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">Qty: ${quantity}</span>
                         <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">Pack: ${item.pack || 'Family'}</span>
                     </div>
-                    <p class="text-sm text-gray-600 mt-2">₹${unitPrice.toFixed(2)} × ${quantity}</p>
                 </div>
                 <div class="text-right">
-                    <div class="text-xs text-gray-500 mb-1">Price</div>
-                    <div class="text-lg font-bold text-gray-800">₹${totalPrice.toFixed(2)}</div>
+                    <div class="text-xs text-gray-500 mb-1">Order item</div>
+                    <div class="text-sm font-medium text-gray-700">${quantity} item${quantity > 1 ? 's' : ''}</div>
                 </div>
             `;
             orderItems.appendChild(itemDiv);
         });
+        
+        // Add cart summary
+        const cartTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'border-t pt-6 mt-6';
+        summaryDiv.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="font-medium text-gray-700">Order contains</span>
+                    <p class="text-sm text-gray-500">${cart.length} unique item${cart.length > 1 ? 's' : ''}</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs text-gray-500 mb-1">Items value</div>
+                    <span class="font-bold text-lg text-gray-900">₹${cartTotal.toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+        orderItems.appendChild(summaryDiv);
     }
     
+    // DISPLAY CUSTOMER DETAILS ON PAGE
     function displayCustomerDetails(address) {
         const customerDetails = document.getElementById('customer-details');
-        if (!customerDetails) return;
-        
         customerDetails.innerHTML = '';
         
         if (!address || Object.keys(address).length === 0) {
@@ -491,10 +528,9 @@
         customerDetails.innerHTML = detailsHTML;
     }
     
+    // DISPLAY DELIVERY ADDRESS ON PAGE
     function displayDeliveryAddress(address, delivery) {
         const deliveryAddress = document.getElementById('delivery-address');
-        if (!deliveryAddress) return;
-        
         deliveryAddress.innerHTML = '';
         
         const deliveryMode = address.deliveryMode || delivery.mode || 'takeaway';
@@ -575,450 +611,381 @@
                             <div class="text-sm text-gray-600 mb-1">Pickup Timings</div>
                             <div class="font-medium text-gray-800">6:00 PM - 10:00 PM</div>
                         </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm text-gray-600 mb-1">Pickup Name</div>
+                                <div class="font-medium text-gray-800">${address.name || 'Not specified'}</div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-sm text-gray-600 mb-1">Contact Number</div>
+                                <div class="font-medium text-gray-800">${address.phone || 'Not specified'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 pt-3 border-t border-purple-100">
+                            <div class="flex items-center text-amber-600">
+                                <span class="mr-2">🔐</span>
+                                <span class="font-medium">OTP verification required at pickup</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
         }
     }
     
-    // GET USER ADDRESS FOR WHATSAPP
-    function getUserAddressForWhatsApp() {
-        try {
-            const addressData = JSON.parse(localStorage.getItem('easygo-address') || '{}');
-            const deliveryData = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
-            
-            if (!addressData || !addressData.name) {
-                return "No address data available";
-            }
-            
-            const deliveryMode = addressData.deliveryMode || deliveryData.mode || 'takeaway';
-            
-            let addressText = "";
-            
-            if (deliveryMode === 'delivery') {
-                const addressParts = [];
-                if (addressData.houseNumber) addressParts.push(addressData.houseNumber);
-                if (addressData.floorNumber) addressParts.push(`Floor ${addressData.floorNumber}`);
-                if (addressData.street) addressParts.push(addressData.street);
-                if (addressData.locality) addressParts.push(addressData.locality);
-                if (addressData.city) addressParts.push(addressData.city);
-                if (addressData.state) addressParts.push(addressData.state);
-                if (addressData.pincode) addressParts.push(addressData.pincode);
-                
-                const fullAddress = addressParts.join(', ');
-                
-                addressText += `*📍 DELIVERY ADDRESS:*%0A`;
-                addressText += `━━━━━━━━━━━━━━━━━━%0A`;
-                addressText += `${fullAddress}%0A`;
-                
-                if (addressData.addressType) {
-                    addressText += `Type: ${addressData.addressType}%0A`;
-                }
-                
-                if (deliveryData.distance) {
-                    addressText += `Distance: ${deliveryData.distance} km from restaurant%0A`;
-                }
-                
-                const googleAddress = encodeURIComponent(fullAddress);
-                addressText += `📍 Maps: https://maps.google.com/?q=${googleAddress}%0A`;
-            } else {
-                addressText += `*🏪 PICKUP DETAILS:*%0A`;
-                addressText += `━━━━━━━━━━━━━━━━━━%0A`;
-                addressText += `Prime Square, Omaxe City 1, Indore%0A`;
-                addressText += `📍 Maps: https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8%0A`;
-                addressText += `Timings: 6:00 PM - 10:00 PM%0A`;
-                addressText += `Customer: ${addressData.name}%0A`;
-                addressText += `Phone: ${addressData.phone || 'N/A'}%0A`;
-                addressText += `📋 OTP verification required at pickup%0A`;
-            }
-            
-            return addressText;
-            
-        } catch (error) {
-            console.error("Error extracting address:", error);
-            return "Address extraction failed";
-        }
-    }
-    
-    // RAZORPAY PAYMENT
+    // RAZORPAY PAYMENT - FIXED FOR UPI ISSUE WITH 2 MINUTE TIMEOUT
     function initiateRazorpayPayment() {
-        if (paymentProcessing) {
-            alert("A payment is already in progress. Please wait.");
+        if (paymentProcessing || !orderData.address?.phone) {
+            showError("Please complete customer details first");
             return;
         }
         
-        if (!validatePaymentPrerequisites()) {
+        if (finalAmount < 1) {
+            showError("Invalid amount");
             return;
         }
         
-        paymentAttempts++;
-        showLoading("Initializing secure payment...");
+        showLoading();
         paymentProcessing = true;
+        paymentInProgress = true;
+        
+        // Set extended wait message after 30 seconds
+        extendedWaitTimer = setTimeout(() => {
+            if (paymentProcessing) {
+                showExtendedWaitMessage();
+            }
+        }, 30000); // Show extended message after 30 seconds
         
         const options = {
             key: RAZORPAY_KEY_ID,
             amount: Math.round(finalAmount * 100),
             currency: "INR",
             name: "Easy Go",
-            description: `Order Payment - ${orderData.address.name || 'Customer'}`,
+            description: "Food Order Payment",
             prefill: {
                 name: orderData.address.name || "Customer",
-                contact: orderData.address.phone || "",
+                contact: orderData.address.phone,
                 email: "customer@easygo.com"
             },
             handler: function(response) {
-                handlePaymentSuccess(response);
+                // Clear all timers
+                clearTimeout(extendedWaitTimer);
+                clearTimeout(upiTimeout);
+                
+                hideLoading();
+                paymentProcessing = false;
+                paymentInProgress = false;
+                processPaymentSuccess(response.razorpay_payment_id);
             },
-            theme: { 
-                color: "#10B981",
-                hide_topbar: false
-            },
+            theme: { color: "#10B981" },
             modal: {
                 ondismiss: function() {
-                    handlePaymentDismiss();
+                    // IMPORTANT: Only show error if payment was actually in progress
+                    // and user didn't just close the modal without selecting anything
+                    // Wait 2 seconds before checking
+                    setTimeout(() => {
+                        if (paymentInProgress) {
+                            // Check if it's a mobile device (likely UPI payment)
+                            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                                console.log("Mobile device detected - UPI payment in progress");
+                                
+                                // Show extended waiting message
+                                document.getElementById('loading-title').textContent = "UPI Payment Detected";
+                                document.getElementById('loading-message').textContent = "Please complete the payment in your UPI app...";
+                                showExtendedWaitMessage();
+                                
+                                // Set a 2 MINUTE (120 seconds) timeout for UPI completion
+                                upiTimeout = setTimeout(() => {
+                                    if (paymentInProgress) {
+                                        hideLoading();
+                                        paymentProcessing = false;
+                                        paymentInProgress = false;
+                                        showError("UPI payment timed out after 2 minutes. Please check your UPI app or try another payment method.");
+                                        document.getElementById('retry-payment').classList.remove('hidden');
+                                    }
+                                }, 120000); // 120 seconds = 2 minutes
+                                
+                            } else {
+                                // For desktop, shorter timeout
+                                setTimeout(() => {
+                                    if (paymentInProgress) {
+                                        hideLoading();
+                                        paymentProcessing = false;
+                                        paymentInProgress = false;
+                                        showError("Payment cancelled. Please try again.");
+                                        document.getElementById('retry-payment').classList.remove('hidden');
+                                    }
+                                }, 30000); // 30 seconds for desktop
+                            }
+                        }
+                    }, 2000); // Wait 2 seconds before showing error
                 },
-                animation: true,
-                backdropclose: false
+                backdropclose: false // Prevent accidental closing
             },
             retry: {
                 enabled: true,
-                max_count: 2
+                max_count: 1
             },
-            timeout: 300,
-            remember_customer: true,
-            notes: {
-                order_type: orderData.totals.deliveryMode,
-                items_count: orderData.cart.length.toString()
-            },
-            external: {
-                wallets: ['paytm', 'phonepe', 'gpay', 'bhim'],
-                UPI: true
-            }
+            timeout: 180 // 3 minutes timeout for Razorpay modal
         };
         
-        try {
-            const rzp = new Razorpay(options);
-            currentRazorpayInstance = rzp;
+        const rzp = new Razorpay(options);
+        
+        rzp.on('payment.failed', function(response) {
+            // Clear all timers
+            clearTimeout(extendedWaitTimer);
+            clearTimeout(upiTimeout);
             
-            rzp.on('payment.failed', function(response) {
-                handlePaymentFailure(response);
-            });
+            hideLoading();
+            paymentProcessing = false;
+            paymentInProgress = false;
             
-            rzp.on('payment.error', function(response) {
-                handlePaymentError(response);
-            });
+            // Don't show popup, just show error message
+            showError("Payment failed: " + (response.error.description || "Please try another payment method"));
+            document.getElementById('retry-payment').classList.remove('hidden');
+        });
+        
+        rzp.on('payment.error', function(response) {
+            // Clear all timers
+            clearTimeout(extendedWaitTimer);
+            clearTimeout(upiTimeout);
             
-            rzp.open();
+            hideLoading();
+            paymentProcessing = false;
+            paymentInProgress = false;
             
-        } catch (error) {
-            console.error("Razorpay initialization error:", error);
-            handleRazorpayError(error);
-        }
+            showError("Payment error occurred. Please try again.");
+            document.getElementById('retry-payment').classList.remove('hidden');
+        });
+        
+        rzp.open();
+        
+        // Set a safety timeout for the entire payment process (2.5 minutes)
+        setTimeout(() => {
+            if (paymentProcessing) {
+                // Clear all timers
+                clearTimeout(extendedWaitTimer);
+                clearTimeout(upiTimeout);
+                
+                hideLoading();
+                paymentProcessing = false;
+                paymentInProgress = false;
+                showError("Payment taking longer than expected. Please check your payment status and try again if needed.");
+            }
+        }, 150000); // 2.5 minutes (150 seconds) safety timeout
     }
     
-    function validatePaymentPrerequisites() {
-        if (!orderData.address?.phone) {
-            alert("Please add your phone number for payment verification");
-            return false;
-        }
-        
-        if (finalAmount < 1) {
-            alert("Invalid payment amount. Please refresh page.");
-            return false;
-        }
-        
-        if (paymentAttempts >= MAX_PAYMENT_ATTEMPTS) {
-            alert("Maximum payment attempts reached. Please contact support.");
-            return false;
-        }
-        
-        return true;
-    }
-    
-    function handlePaymentSuccess(response) {
-        hideLoading();
-        paymentProcessing = false;
-        
-        if (!response.razorpay_payment_id) {
-            alert("Payment completed but no payment ID received. Please contact support.");
-            return;
-        }
-        
-        processPaymentSuccess(response.razorpay_payment_id);
-    }
-    
+    // PROCESS PAYMENT SUCCESS
     function processPaymentSuccess(paymentId) {
+        // Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const orderId = "EG" + Date.now().toString().slice(-8);
         
+        const deliveryMode = orderData.totals.deliveryMode || 'takeaway';
+        
+        // Save order with all totals
         const order = {
-            id: orderId,
+            id: "EG" + Date.now().toString().slice(-6),
             paymentId: paymentId,
             otp: otp,
             amount: finalAmount,
-            customer: orderData.address.name || 'Customer',
-            phone: orderData.address.phone || '',
-            items: orderData.cart.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                pack: item.pack,
-                unitPrice: parseFloat(item.unitPrice) || 0,
-                total: parseFloat(item.total) || parseFloat(item.totalPrice) || 0
-            })),
-            deliveryMode: orderData.totals.deliveryMode,
+            customer: orderData.address.name,
+            phone: orderData.address.phone,
+            items: orderData.cart,
+            deliveryMode: deliveryMode,
             totals: orderData.totals,
             address: orderData.address,
             delivery: orderData.delivery,
-            timestamp: new Date().toISOString(),
-            paymentMethod: "razorpay",
-            status: "pending"
+            timestamp: new Date().toISOString()
         };
         
-        orderSuccessData = order;
+        // Save order to localStorage
+        let orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
+        orders.push(order);
+        localStorage.setItem('easygo-orders', JSON.stringify(orders));
         
-        saveOrderAndProceed(order, otp);
-        sendOrderToWhatsApp(order);
+        // Save for tracking
+        localStorage.setItem('easygo-otp', otp);
+        localStorage.setItem('easygo-order-id', order.id);
+        localStorage.setItem('easygo-delivery-mode', deliveryMode);
         
+        // Clear cart (keep address and delivery for future orders)
+        localStorage.removeItem('easygo-cart');
+        localStorage.removeItem('easygo-cart-items-total');
+        localStorage.removeItem('easygo-coupon');
+        
+        // Show OTP in success modal
         document.getElementById('generated-otp').textContent = otp;
         document.getElementById('success-modal').classList.remove('hidden');
         
+        // Send WhatsApp message WITH ALL FETCHED DETAILS
+        sendWhatsApp(order, otp);
+        
         // Auto redirect to tracking after 5 seconds
         setTimeout(() => {
-            window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
+            if (!document.getElementById('success-modal').classList.contains('hidden')) {
+                window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
+            }
         }, 5000);
     }
     
-    function handlePaymentFailure(response) {
-        console.error("Payment failed:", response);
-        hideLoading();
-        paymentProcessing = false;
-        
-        let errorMsg = response.error.description || "Payment failed. Please try again.";
-        
-        document.getElementById('failed-message').textContent = "Payment Failed";
-        document.getElementById('failed-details').textContent = errorMsg;
-        document.getElementById('failed-modal').classList.remove('hidden');
-        
-        document.getElementById('retry-payment').classList.remove('hidden');
-    }
-    
-    function handlePaymentError(response) {
-        console.error("Payment error:", response);
-        hideLoading();
-        paymentProcessing = false;
-        
-        document.getElementById('failed-message').textContent = "Payment Error";
-        document.getElementById('failed-details').textContent = "An error occurred during payment processing. Please try again.";
-        document.getElementById('failed-modal').classList.remove('hidden');
-        
-        document.getElementById('retry-payment').classList.remove('hidden');
-    }
-    
-    function handlePaymentDismiss() {
-        hideLoading();
-        paymentProcessing = false;
-        
-        document.getElementById('retry-payment').classList.remove('hidden');
-    }
-    
-    function handleRazorpayError(error) {
-        console.error("Razorpay error:", error);
-        hideLoading();
-        paymentProcessing = false;
-        
-        document.getElementById('failed-message').textContent = "Connection Error";
-        document.getElementById('failed-details').textContent = "Unable to connect to payment gateway. Please check your internet connection.";
-        document.getElementById('failed-modal').classList.remove('hidden');
-        
-        document.getElementById('retry-payment').classList.remove('hidden');
-    }
-    
-    function showLoading(message = "Connecting to payment gateway...") {
-        document.getElementById('loading-message').textContent = message;
-        document.getElementById('loading-modal').classList.remove('hidden');
-        document.getElementById('razorpay-pay-btn').disabled = true;
-        
-        let progress = 30;
-        const progressBar = document.getElementById('progress-bar');
-        const interval = setInterval(() => {
-            progress += 5;
-            if (progress > 90) progress = 90;
-            progressBar.style.width = progress + '%';
-        }, 1000);
-        
-        window.loadingInterval = interval;
-    }
-    
-    function hideLoading() {
-        document.getElementById('loading-modal').classList.add('hidden');
-        document.getElementById('razorpay-pay-btn').disabled = false;
-        
-        if (window.loadingInterval) {
-            clearInterval(window.loadingInterval);
-        }
-        document.getElementById('progress-bar').style.width = '30%';
-    }
-    
-    // WHATSAPP NOTIFICATION
-    function sendOrderToWhatsApp(order) {
-        let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
-        
-        message += `*Order ID:* ${order.id}%0A`;
-        message += `*OTP:* ${order.otp}%0A`;
-        message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
-        message += `*Payment ID:* ${order.paymentId}%0A`;
-        message += `*Status:* CONFIRMED ✅%0A%0A`;
-        
-        message += `*ITEMS ORDERED:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        order.items.forEach(item => {
-            const quantity = parseInt(item.quantity) || 1;
-            const unitPrice = parseFloat(item.unitPrice) || 0;
-            const totalPrice = parseFloat(item.total) || (unitPrice * quantity);
-            
-            message += `• ${item.name} × ${quantity}%0A`;
-            message += `  Pack: ${item.pack || 'Standard'}%0A`;
-            message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}%0A%0A`;
-        });
-        
-        message += `*PAYMENT BREAKDOWN:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
-        
-        if (order.totals?.gstFood > 0) {
-            message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
-        }
-        
-        if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
-            message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
-            if (order.totals?.deliveryCharge === 9) {
-                message += `GST on Delivery: Included in ₹9%0A`;
-            } else if (order.totals?.gstDelivery > 0) {
-                message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
-            }
-        }
-        
-        message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
-        
-        message += `*CUSTOMER DETAILS:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `👤 Name: ${order.customer || 'N/A'}%0A`;
-        message += `📱 Phone: ${order.phone || 'N/A'}%0A`;
-        message += `💳 Payment: Razorpay (Online)%0A%0A`;
-        
-        // Add address from the dedicated function
-        const addressMessage = getUserAddressForWhatsApp();
-        message += addressMessage;
-        
-        message += `%0A*📅 ORDER TIME:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `⏰ ${new Date().toLocaleTimeString()}%0A`;
-        message += `📅 ${new Date().toLocaleDateString()}%0A%0A`;
-        
-        message += `_Order placed via EasyGo Payment System_`;
-        
-        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${message}`;
-        
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-            window.location.href = whatsappURL;
-        } else {
-            window.open(whatsappURL, '_blank');
-        }
-    }
-    
-    // SAVE ORDER FOR FUTURE PAGES
-    function saveOrderAndProceed(order, otp) {
+    // SEND WHATSAPP MESSAGE
+    function sendWhatsApp(order, otp) {
         try {
-            // Save to easygo-orders (all orders history)
-            let orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
-            orders.push(order);
-            localStorage.setItem('easygo-orders', JSON.stringify(orders));
+            let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
             
-            // Save to easygo-active-orders (current active orders)
-            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
-            const activeOrder = {
+            // Basic order info
+            message += `*Order ID:* ${order.id}%0A`;
+            message += `*OTP:* ${otp}%0A`;
+            message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
+            message += `*Payment ID:* ${order.paymentId}%0A`;
+            message += `*Status:* CONFIRMED ✅%0A%0A`;
+            
+            // Items with price details
+            message += `*Items Ordered:*%0A`;
+            order.items.forEach(item => {
+                const quantity = parseInt(item.quantity) || 1;
+                const totalPrice = parseFloat(item.total) || 0;
+                const pricePerItem = totalPrice / quantity;
+                
+                message += `• ${item.name} × ${quantity} (${item.pack || 'Standard'})%0A`;
+                message += `  Price: ₹${pricePerItem.toFixed(2)} each → Total: ₹${totalPrice.toFixed(2)}%0A`;
+            });
+            
+            message += `%0A*Payment Breakdown:*%0A`;
+            message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
+            
+            if (order.totals?.gstFood > 0) {
+                message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
+            }
+            
+            if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
+                message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
+                if (order.totals?.deliveryCharge === 9) {
+                    message += `GST on Delivery: Included in ₹9%0A`;
+                } else if (order.totals?.gstDelivery > 0) {
+                    message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
+                }
+            }
+            
+            message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
+            
+            // Customer details
+            message += `*Customer Details:*%0A`;
+            message += `Name: ${order.customer || 'N/A'}%0A`;
+            message += `Phone: ${order.phone || 'N/A'}%0A`;
+            
+            // Delivery/Takeaway info
+            if (order.deliveryMode === 'delivery') {
+                message += `%0A*📍 Delivery Address:*%0A`;
+                
+                if (order.address?.houseNumber || order.address?.locality) {
+                    message += `${order.address.houseNumber || ''}, ${order.address.locality || ''}%0A`;
+                    if (order.address.street) message += `${order.address.street}%0A`;
+                    message += `${order.address.city || 'Indore'}, ${order.address.state || 'MP'} - ${order.address.pincode || ''}%0A`;
+                    
+                    if (order.address.addressType) {
+                        message += `Type: ${order.address.addressType}%0A`;
+                    }
+                }
+                
+                if (order.delivery?.distance) {
+                    message += `Distance: ${order.delivery.distance} km%0A`;
+                }
+                
+                if (order.delivery?.charge > 0) {
+                    message += `Delivery Fee: ₹${parseFloat(order.delivery.charge).toFixed(2)}%0A`;
+                }
+                
+                // Create Google Maps link from address
+                const addressForMaps = encodeURIComponent(
+                    `${order.address.houseNumber || ''} ${order.address.street || ''} ${order.address.locality || ''} ${order.address.city || 'Indore'}`
+                );
+                message += `%0A📍 *Google Maps:* https://maps.google.com/?q=${addressForMaps}`;
+                
+            } else {
+                message += `%0A*🏪 Takeaway Pickup:*%0A`;
+                message += `Prime Square, Omaxe City 1, Indore%0A`;
+                message += `Timings: 6:00 PM - 10:00 PM%0A`;
+                message += `Customer: ${order.customer || 'N/A'}%0A`;
+                message += `Phone: ${order.phone || 'N/A'}%0A`;
+                message += `OTP verification required at pickup%0A`;
+                message += `📍 *Google Maps:* https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8`;
+            }
+            
+            console.log("WhatsApp message with ALL FETCHED DETAILS:", decodeURIComponent(message));
+            
+            // Open WhatsApp with the message
+            window.open(`https://wa.me/${RESTAURANT_PHONE}?text=${message}`, '_blank');
+            
+            // Also save to delivery system
+            saveToDeliverySystem(order, otp);
+            
+        } catch (error) {
+            console.error("Error sending WhatsApp:", error);
+            // Fallback simple message
+            const fallbackMsg = `New Order! Order ID: ${order.id}, OTP: ${otp}, Amount: ₹${order.amount}, Phone: ${order.phone}`;
+            window.open(`https://wa.me/${RESTAURANT_PHONE}?text=${fallbackMsg}`, '_blank');
+        }
+    }
+    
+    // SAVE TO DELIVERY SYSTEM
+    function saveToDeliverySystem(order, otp) {
+        try {
+            let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders')) || [];
+            
+            const deliveryOrder = {
                 orderId: order.id,
                 razorpayPaymentId: order.paymentId,
-                customerName: order.customer,
-                customerPhone: order.phone,
+                customerName: order.customer || order.address?.name || 'Customer',
+                customerPhone: order.phone || order.address?.phone || '',
                 totalAmount: order.amount,
                 items: order.items.map(item => ({
                     name: item.name,
                     quantity: item.quantity,
-                    pack: item.pack,
-                    unitPrice: item.unitPrice,
-                    total: item.total
+                    price: parseFloat(item.total) || 0,
+                    pack: item.pack || 'standard'
                 })),
                 address: order.deliveryMode === 'delivery' ? 
                     `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
                     "Takeaway - Prime Square, Omaxe City 1, Indore",
-                deliveryMode: order.deliveryMode,
-                status: 'pending',
-                timestamp: order.timestamp,
-                paymentMethod: order.paymentMethod,
+                deliveryMode: order.deliveryMode || 'takeaway',
+                status: 'order-received',
+                timestamp: new Date().toISOString(),
+                paymentMethod: 'razorpay',
                 paymentId: order.paymentId,
                 otp: otp,
-                deliveryPartner: "Nishant",
-                deliveryPartnerPhone: "+917651837322",
-                // Store complete address object for tracking page
-                completeAddress: order.address,
-                deliveryDetails: order.delivery,
-                orderSummary: order.totals
+                deliveryPartner: "EasyGo-Rider",
+                deliveryPartnerPhone: "+91 76518 37322"
             };
-            activeOrders.push(activeOrder);
+            
+            activeOrders.push(deliveryOrder);
             localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
             
-            // Save individual values for easy access
-            localStorage.setItem('easygo-otp', otp);
-            localStorage.setItem('easygo-order-id', order.id);
-            localStorage.setItem('easygo-delivery-mode', order.deliveryMode);
-            localStorage.setItem('easygo-last-order', JSON.stringify(order));
-            localStorage.setItem('easygo-last-payment-id', order.paymentId);
-            localStorage.setItem('easygo-last-payment-amount', order.amount.toString());
-            
-            // Clear cart but keep address for future orders
-            localStorage.removeItem('easygo-cart');
-            localStorage.removeItem('easygo-cart-items-total');
-            localStorage.removeItem('easygo-delivery'); // Clear delivery charges after order
-            
-            // Store payment success for analytics
-            localStorage.setItem('easygo-last-successful-payment', Date.now().toString());
-            
-            console.log("Order saved successfully for tracking page");
+            console.log("Order saved to delivery system:", deliveryOrder);
             
         } catch (error) {
-            console.error("Error saving order:", error);
+            console.error("Error saving to delivery system:", error);
         }
     }
     
-    // INITIALIZATION
+    // EVENT LISTENERS
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("Payment page loaded");
+        loadOrderData();
         
-        if (!loadOrderData()) {
-            return;
-        }
-        
-        setupEventListeners();
-    });
-    
-    function setupEventListeners() {
         document.getElementById('razorpay-pay-btn').addEventListener('click', initiateRazorpayPayment);
-        
-        document.getElementById('retry-payment').addEventListener('click', function() {
-            this.classList.add('hidden');
-            initiateRazorpayPayment();
-        });
-        
-        document.getElementById('retry-payment-modal').addEventListener('click', function() {
-            document.getElementById('failed-modal').classList.add('hidden');
-            initiateRazorpayPayment();
-        });
         
         document.getElementById('go-to-tracking').addEventListener('click', function() {
             window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
         });
-    }
+        
+        document.getElementById('retry-payment').addEventListener('click', function() {
+            document.getElementById('retry-payment').classList.add('hidden');
+            initiateRazorpayPayment();
+        });
+    });
 </script>
     
 </body>
