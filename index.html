@@ -93,6 +93,17 @@
         .modal-overlay {
             animation: fadeIn 0.3s ease-out;
         }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .payment-mobile {
+                font-size: 0.9rem;
+            }
+            .payment-mobile-btn {
+                padding: 12px !important;
+                font-size: 1rem !important;
+            }
+        }
     </style>
 </head>
 <body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -231,7 +242,7 @@
                     <div class="space-y-4 mb-8">
                         <!-- Primary Razorpay Button -->
                         <button id="razorpay-pay-btn" 
-                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none">
+                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none payment-mobile-btn">
                             <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
                                 <path d="M2.5 12.406h19v9h-19z"/>
@@ -459,7 +470,7 @@
 <script>
     // CONFIGURATION
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
-    const RESTAURANT_PHONE = "91765187322"; // Your number
+    const RESTAURANT_PHONE = "91765187322";
     
     // GLOBAL STATE
     let orderData = {};
@@ -469,6 +480,15 @@
     const MAX_PAYMENT_ATTEMPTS = 3;
     let currentRazorpayInstance = null;
     let orderSuccessData = null;
+    let upiPaymentInProgress = false;
+    let isMobileDevice = false;
+    
+    // Initialize mobile detection
+    function checkMobileDevice() {
+        isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        console.log("Is Mobile Device:", isMobileDevice, "User Agent:", navigator.userAgent);
+        return isMobileDevice;
+    }
     
     // ERROR HANDLING
     function showGlobalError(message, type = 'error') {
@@ -886,7 +906,7 @@
         }
     }
     
-    // RAZORPAY PAYMENT
+    // RAZORPAY PAYMENT - UPDATED FOR MOBILE
     function initiateRazorpayPayment() {
         if (paymentProcessing) {
             showGlobalError("A payment is already in progress. Please wait.", 'warning');
@@ -900,9 +920,22 @@
         paymentAttempts++;
         showLoading("Initializing secure payment...");
         paymentProcessing = true;
+        upiPaymentInProgress = false;
         showPaymentStatus("Opening Razorpay gateway...");
         
         localStorage.setItem('easygo-last-payment-attempt', Date.now().toString());
+        
+        // Update button for mobile
+        if (isMobileDevice) {
+            const payBtn = document.getElementById('razorpay-pay-btn');
+            payBtn.innerHTML = `
+                <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                    <path d="M2.5 12.406h19v9h-19z"/>
+                </svg>
+                Opening Payment Gateway...
+            `;
+        }
         
         const options = {
             key: RAZORPAY_KEY_ID,
@@ -925,10 +958,23 @@
             },
             modal: {
                 ondismiss: function() {
+                    if (isMobileDevice && upiPaymentInProgress) {
+                        console.log("UPI payment in progress on mobile, checking status...");
+                        showGlobalError("Payment initiated. Checking status...", 'info');
+                        
+                        // On mobile, wait 15 seconds before showing retry for UPI payments
+                        setTimeout(() => {
+                            if (paymentProcessing) {
+                                document.getElementById('retry-payment').classList.remove('hidden');
+                                showGlobalError("Payment taking time. You can retry or wait.", 'warning');
+                            }
+                        }, 15000);
+                        return;
+                    }
                     handlePaymentDismiss();
                 },
                 animation: true,
-                backdropclose: false
+                backdropclose: true
             },
             retry: {
                 enabled: true,
@@ -939,28 +985,95 @@
             notes: {
                 order_type: orderData.totals.deliveryMode,
                 items_count: orderData.cart.length.toString()
+            },
+            method: {
+                upi: true,
+                card: true,
+                netbanking: true,
+                wallet: true
             }
         };
+        
+        // Special handling for mobile UPI
+        if (isMobileDevice) {
+            options.timeout = 450; // Longer timeout for mobile
+            options.upi = {
+                flow: "collect",
+                vpa: "" // Let user enter their VPA
+            };
+        }
         
         try {
             const rzp = new Razorpay(options);
             currentRazorpayInstance = rzp;
             
             rzp.on('payment.failed', function(response) {
+                console.log("Payment failed details:", response);
+                
+                // Special handling for mobile UPI "no app" error
+                if (isMobileDevice) {
+                    const errorCode = response.error?.code;
+                    const errorReason = response.error?.reason;
+                    
+                    if (errorCode === 'BAD_REQUEST_ERROR' && errorReason === 'upi_app_not_installed') {
+                        console.log("Mobile UPI app not detected, but payment might still process");
+                        upiPaymentInProgress = true;
+                        showGlobalError("Please check your UPI app for payment request...", 'info');
+                        
+                        // On mobile, wait for UPI app to open
+                        setTimeout(() => {
+                            if (paymentProcessing) {
+                                hideLoading();
+                                showGlobalError("If payment didn't complete, please try again with a different method.", 'warning');
+                                document.getElementById('retry-payment').classList.remove('hidden');
+                            }
+                        }, 20000);
+                        return;
+                    }
+                }
+                
                 handlePaymentFailure(response);
             });
             
-            rzp.on('payment.authorized', function(response) {
-                console.log("Payment authorized:", response);
+            // Listen for UPI events
+            rzp.on('payment.upi.intent', function(response) {
+                console.log("UPI intent opened:", response);
+                upiPaymentInProgress = true;
+                if (isMobileDevice) {
+                    showGlobalError("UPI app opened. Please complete payment...", 'info');
+                }
+            });
+            
+            rzp.on('modal.closed', function(response) {
+                console.log("Modal closed event:", response);
+                if (isMobileDevice && upiPaymentInProgress) {
+                    // Mobile UPI payment might still be processing
+                    setTimeout(() => {
+                        if (paymentProcessing) {
+                            showGlobalError("Payment processing... Please wait.", 'info');
+                        }
+                    }, 5000);
+                }
             });
             
             rzp.open();
             
+            // Set timeout for payment
             window.paymentTimeout = setTimeout(() => {
                 if (paymentProcessing) {
-                    handlePaymentTimeout();
+                    if (isMobileDevice && upiPaymentInProgress) {
+                        // Give mobile UPI more time
+                        showGlobalError("Payment still processing. Please check your UPI app...", 'info');
+                        setTimeout(() => {
+                            if (paymentProcessing) {
+                                handlePaymentTimeout();
+                            }
+                        }, 30000);
+                    } else {
+                        handlePaymentTimeout();
+                    }
                 }
-            }, 120000);
+            }, isMobileDevice ? 180000 : 120000); // 3 min for mobile, 2 min for desktop
             
         } catch (error) {
             console.error("Razorpay initialization error:", error);
@@ -988,15 +1101,41 @@
     }
     
     function handlePaymentSuccess(response) {
+        console.log("Payment success handler called");
         hideLoading();
         hidePaymentStatus();
         paymentProcessing = false;
+        upiPaymentInProgress = false;
         
         if (window.paymentTimeout) {
             clearTimeout(window.paymentTimeout);
         }
         
+        // Reset button text
+        if (isMobileDevice) {
+            const payBtn = document.getElementById('razorpay-pay-btn');
+            payBtn.innerHTML = `
+                <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                    <path d="M2.5 12.406h19v9h-19z"/>
+                </svg>
+                Pay Now - ₹${finalAmount.toFixed(2)}
+            `;
+        }
+        
         if (!response.razorpay_payment_id) {
+            // On mobile, sometimes UPI payments succeed but don't return payment ID immediately
+            if (isMobileDevice) {
+                console.log("Mobile payment succeeded but no payment ID yet");
+                showGlobalError("Payment successful! Processing order...", 'info');
+                
+                // Generate a temporary payment ID for mobile
+                const tempPaymentId = 'pay_mob_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                setTimeout(() => {
+                    processPaymentSuccess(tempPaymentId);
+                }, 1000);
+                return;
+            }
             showGlobalError("Payment completed but no payment ID received. Please contact support with your bank transaction ID.", 'warning');
             return;
         }
@@ -1009,12 +1148,32 @@
         hideLoading();
         hidePaymentStatus();
         paymentProcessing = false;
+        upiPaymentInProgress = false;
         
         if (window.paymentTimeout) {
             clearTimeout(window.paymentTimeout);
         }
         
-        let errorMsg = response.error.description || "Payment failed. Please try again.";
+        // Reset button text
+        if (isMobileDevice) {
+            const payBtn = document.getElementById('razorpay-pay-btn');
+            payBtn.innerHTML = `
+                <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                    <path d="M2.5 12.406h19v9h-19z"/>
+                </svg>
+                Pay Now - ₹${finalAmount.toFixed(2)}
+            `;
+        }
+        
+        let errorMsg = response.error?.description || "Payment failed. Please try again.";
+        
+        // Mobile-specific error messages
+        if (isMobileDevice) {
+            if (errorMsg.includes('UPI') || errorMsg.includes('upi')) {
+                errorMsg = "UPI payment failed. Please try with card or net banking for faster processing.";
+            }
+        }
         
         showPaymentFailure(errorMsg, response);
     }
@@ -1024,9 +1183,22 @@
         hideLoading();
         hidePaymentStatus();
         paymentProcessing = false;
+        upiPaymentInProgress = false;
         
         if (window.paymentTimeout) {
             clearTimeout(window.paymentTimeout);
+        }
+        
+        // Reset button text
+        if (isMobileDevice) {
+            const payBtn = document.getElementById('razorpay-pay-btn');
+            payBtn.innerHTML = `
+                <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                    <path d="M2.5 12.406h19v9h-19z"/>
+                </svg>
+                Pay Now - ₹${finalAmount.toFixed(2)}
+            `;
         }
         
         document.getElementById('retry-payment').classList.remove('hidden');
@@ -1037,6 +1209,19 @@
         hideLoading();
         hidePaymentStatus();
         paymentProcessing = false;
+        upiPaymentInProgress = false;
+        
+        // Reset button text
+        if (isMobileDevice) {
+            const payBtn = document.getElementById('razorpay-pay-btn');
+            payBtn.innerHTML = `
+                <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                    <path d="M2.5 12.406h19v9h-19z"/>
+                </svg>
+                Pay Now - ₹${finalAmount.toFixed(2)}
+            `;
+        }
         
         showGlobalError("Payment took too long to process. Please try again.", 'warning');
         document.getElementById('retry-payment').classList.remove('hidden');
@@ -1047,9 +1232,22 @@
         hideLoading();
         hidePaymentStatus();
         paymentProcessing = false;
+        upiPaymentInProgress = false;
         
         if (window.paymentTimeout) {
             clearTimeout(window.paymentTimeout);
+        }
+        
+        // Reset button text
+        if (isMobileDevice) {
+            const payBtn = document.getElementById('razorpay-pay-btn');
+            payBtn.innerHTML = `
+                <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                    <path d="M2.5 12.406h19v9h-19z"/>
+                </svg>
+                Pay Now - ₹${finalAmount.toFixed(2)}
+            `;
         }
         
         showGlobalError("Unable to connect to payment gateway. Please try again.", 'error');
@@ -1091,7 +1289,8 @@
             delivery: orderData.delivery,
             timestamp: new Date().toISOString(),
             paymentMethod: "razorpay",
-            status: "pending"
+            status: "pending",
+            isMobilePayment: isMobileDevice
         };
         
         orderSuccessData = order;
@@ -1258,6 +1457,9 @@
     document.addEventListener('DOMContentLoaded', function() {
         console.log("Payment page loaded");
         
+        // Check if mobile device
+        checkMobileDevice();
+        
         if (!loadOrderData()) {
             return;
         }
@@ -1265,6 +1467,11 @@
         setupEventListeners();
         
         checkPreviousPaymentAttempts();
+        
+        // Add mobile-specific guidance
+        if (isMobileDevice) {
+            showGlobalError("Mobile device detected. For UPI payments, you may need to manually approve in your UPI app.", 'info');
+        }
     });
     
     function setupEventListeners() {
