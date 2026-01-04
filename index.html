@@ -13,36 +13,50 @@
         
         .razorpay-payment-button { display: none !important; }
         
-        /* Custom Popup Cards */
-        .popup-card {
+        /* Notification Cards */
+        .notification-card {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        .notification-card.show {
+            transform: translateX(0);
+        }
+        
+        /* Simple Alert Card */
+        .alert-card {
             position: fixed;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) scale(0.95);
-            z-index: 1000;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
             opacity: 0;
             pointer-events: none;
             transition: all 0.3s ease;
         }
         
-        .popup-card.active {
-            transform: translate(-50%, -50%) scale(1);
+        .alert-card.active {
             opacity: 1;
             pointer-events: all;
         }
         
-        .popup-overlay {
+        /* Alert Overlay */
+        .alert-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-            z-index: 999;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(3px);
+            z-index: 1000;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
         }
         
-        .popup-overlay.active {
+        .alert-overlay.active {
             opacity: 1;
             pointer-events: all;
         }
@@ -65,6 +79,21 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -81,13 +110,13 @@
         </div>
     </header>
 
-    <!-- Success Popup Card -->
-    <div class="popup-card" id="success-popup">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
+    <!-- Success Alert Card -->
+    <div class="alert-card" id="success-alert">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl border-2 border-green-200">
             <div class="text-center">
-                <div class="text-6xl mb-6">🎉</div>
+                <div class="text-6xl mb-6">✅</div>
                 <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
-                <p class="text-gray-600 mb-6">Your order has been confirmed. Please save this OTP:</p>
+                <p class="text-gray-600 mb-6">Order confirmed. Please save this OTP:</p>
                 
                 <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl payment-success" id="generated-otp">
                     XXX XXX
@@ -95,13 +124,9 @@
                 
                 <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
                     <p class="text-sm text-green-800">
-                        <strong>Next steps:</strong> Share this OTP with delivery partner for verification.
+                        <strong>Next steps:</strong> Share OTP with delivery partner for verification.
                     </p>
                 </div>
-                
-                <p class="text-sm text-gray-500 mb-6">
-                    Order details have been sent to restaurant.
-                </p>
                 
                 <button onclick="goToTracking()" 
                         class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg hover:shadow-xl">
@@ -111,51 +136,96 @@
         </div>
     </div>
 
-    <!-- Error Popup Card -->
-    <div class="popup-card" id="error-popup">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
+    <!-- Error Alert Card -->
+    <div class="alert-card" id="error-alert">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl border-2 border-red-200">
             <div class="text-center">
-                <div class="text-6xl mb-6">❌</div>
+                <div class="text-6xl mb-6">⚠️</div>
                 <h3 class="text-2xl font-bold mb-4" id="error-title">Payment Failed</h3>
                 <p class="text-gray-600 mb-6" id="error-message">Payment could not be processed.</p>
                 
                 <div class="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
                     <p class="text-red-800 mb-3" id="error-details"></p>
                     <p class="text-sm text-red-700">
-                        <strong>Note:</strong> If amount was deducted, contact support.
+                        <strong>Note:</strong> If amount was deducted, it will be refunded within 24-48 hours.
                     </p>
                 </div>
                 
                 <div class="space-y-4">
-                    <button onclick="closePopup('error-popup'); initiateRazorpayPayment();" 
+                    <button onclick="closeAlert('error-alert'); initiatePayment();" 
                             class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg">
                         Try Payment Again
                     </button>
                     
-                    <button onclick="closePopup('error-popup')" 
+                    <button onclick="closeAlert('error-alert')" 
                             class="w-full py-3 bg-gray-200 text-gray-800 rounded-2xl hover:bg-gray-300">
-                        Cancel
+                        Close
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Loading Popup Card -->
-    <div class="popup-card" id="loading-popup">
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
+    <!-- Out of Range Alert -->
+    <div class="alert-card" id="range-alert">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl border-2 border-orange-200">
             <div class="text-center">
-                <div class="loader mx-auto mb-6">
-                    <div class="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                <div class="text-6xl mb-6">📍</div>
+                <h3 class="text-2xl font-bold mb-4">Delivery Not Available</h3>
+                <p class="text-gray-600 mb-6" id="range-message"></p>
+                
+                <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-6">
+                    <p class="text-sm text-orange-800">
+                        <strong>Current Delivery Range:</strong> Up to 10km from outlet only.
+                    </p>
                 </div>
-                <h3 class="text-2xl font-bold mb-4" id="loading-title">Processing Payment</h3>
-                <p class="text-gray-600 mb-6" id="loading-message">Connecting to payment gateway...</p>
+                
+                <button onclick="closeAlert('range-alert'); window.history.back();" 
+                        class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg">
+                    ← Back to Address
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Overlay for popups -->
-    <div class="popup-overlay" id="popup-overlay" onclick="closeAllPopups()"></div>
+    <!-- Loading Inline (Not a popup) -->
+    <div id="loading-indicator" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
+            <div class="text-center">
+                <div class="loading-spinner mx-auto mb-6"></div>
+                <h3 class="text-2xl font-bold mb-4" id="loading-title">Processing Payment</h3>
+                <p class="text-gray-600" id="loading-message">Please wait...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Overlay -->
+    <div class="alert-overlay" id="alert-overlay" onclick="closeAllAlerts()"></div>
+
+    <!-- Notification Cards -->
+    <div class="notification-card" id="success-notification">
+        <div class="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 rounded-2xl shadow-xl max-w-sm">
+            <div class="flex items-center gap-4">
+                <div class="text-3xl">✅</div>
+                <div>
+                    <h4 class="font-bold text-lg">Payment Successful!</h4>
+                    <p class="text-green-100 text-sm">Order confirmed. OTP generated.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification-card" id="error-notification">
+        <div class="bg-gradient-to-r from-red-500 to-pink-600 text-white p-6 rounded-2xl shadow-xl max-w-sm">
+            <div class="flex items-center gap-4">
+                <div class="text-3xl">❌</div>
+                <div>
+                    <h4 class="font-bold text-lg">Payment Failed</h4>
+                    <p class="text-red-100 text-sm" id="error-notification-msg">Please try again</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="max-w-7xl mx-auto px-4 pt-10 pb-20">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -247,9 +317,10 @@
                     </div>
                     
                     <div class="space-y-4 mb-8">
-                        <!-- SIMPLE RAZORPAY BUTTON - NO MODAL COMPLICATIONS -->
+                        <!-- SIMPLE RAZORPAY BUTTON WITH NO UPI VIBRATIONS -->
                         <button id="razorpay-pay-btn" 
-                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none">
+                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
+                                onclick="initiatePayment()">
                             <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
                                 <path d="M2.5 12.406h19v9h-19z"/>
@@ -282,7 +353,8 @@
                                 <span>Back to Address</span>
                             </a>
                             <button id="retry-payment" 
-                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center group">
+                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center group"
+                                    onclick="initiatePayment()">
                                 <span class="mr-2 group-hover:rotate-180 transition-transform">🔄</span>
                                 <span>Retry Payment</span>
                             </button>
@@ -328,54 +400,55 @@
 <script>
     // CONFIGURATION
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
-    const RESTAURANT_PHONE = "917651837322"; // YOUR NUMBER
+    const RESTAURANT_PHONE = "917651837322";
     
     // GLOBAL STATE
     let orderData = {};
     let finalAmount = 0;
     let paymentProcessing = false;
     
-    // POPUP FUNCTIONS
-    function showPopup(popupId) {
-        document.getElementById(popupId).classList.add('active');
-        document.getElementById('popup-overlay').classList.add('active');
+    // ALERT FUNCTIONS
+    function showAlert(alertId) {
+        document.getElementById(alertId).classList.add('active');
+        document.getElementById('alert-overlay').classList.add('active');
         document.body.style.overflow = 'hidden';
     }
     
-    function closePopup(popupId) {
-        document.getElementById(popupId).classList.remove('active');
-        document.getElementById('popup-overlay').classList.remove('active');
+    function closeAlert(alertId) {
+        document.getElementById(alertId).classList.remove('active');
+        document.getElementById('alert-overlay').classList.remove('active');
         document.body.style.overflow = 'auto';
     }
     
-    function closeAllPopups() {
-        document.querySelectorAll('.popup-card').forEach(popup => {
-            popup.classList.remove('active');
+    function closeAllAlerts() {
+        document.querySelectorAll('.alert-card').forEach(alert => {
+            alert.classList.remove('active');
         });
-        document.getElementById('popup-overlay').classList.remove('active');
+        document.getElementById('alert-overlay').classList.remove('active');
         document.body.style.overflow = 'auto';
     }
     
-    function showLoading(title, message) {
-        document.getElementById('loading-title').textContent = title;
-        document.getElementById('loading-message').textContent = message;
-        showPopup('loading-popup');
+    function showNotification(type, message = '') {
+        const notificationId = type === 'success' ? 'success-notification' : 'error-notification';
+        const notification = document.getElementById(notificationId);
+        
+        if (message && type === 'error') {
+            document.getElementById('error-notification-msg').textContent = message.substring(0, 50);
+        }
+        
+        notification.classList.add('show');
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 3000);
+    }
+    
+    function showLoading() {
+        document.getElementById('loading-indicator').classList.remove('hidden');
     }
     
     function hideLoading() {
-        closePopup('loading-popup');
-    }
-    
-    function showError(title, message, details) {
-        document.getElementById('error-title').textContent = title;
-        document.getElementById('error-message').textContent = message;
-        document.getElementById('error-details').textContent = details;
-        showPopup('error-popup');
-    }
-    
-    function showSuccess(otp) {
-        document.getElementById('generated-otp').textContent = otp;
-        showPopup('success-popup');
+        document.getElementById('loading-indicator').classList.add('hidden');
     }
     
     // LOAD ORDER DATA FROM ADDRESS PAGE
@@ -386,7 +459,8 @@
             const delivery = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
             
             if (cart.length === 0) {
-                showError('Empty Cart', 'Your cart is empty', 'Redirecting to menu...');
+                showAlert('range-alert');
+                document.getElementById('range-message').textContent = 'Your cart is empty. Redirecting to menu...';
                 setTimeout(() => {
                     window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
                 }, 3000);
@@ -410,7 +484,7 @@
             }
             
             if (foodTotal <= 0) {
-                showError('Invalid Amount', 'Invalid order amount', 'Please refresh page.');
+                showNotification('error', 'Invalid order amount');
                 return false;
             }
             
@@ -425,11 +499,18 @@
                 const distance = parseFloat(delivery.distance) || 0;
                 const cartTotal = foodTotal;
                 
+                // CHECK IF BEYOND 10KM
+                if (distance > 10) {
+                    showAlert('range-alert');
+                    document.getElementById('range-message').textContent = `Your location (${distance.toFixed(1)}km) is beyond our 10km delivery range.`;
+                    return false;
+                }
+                
                 // 1KM FIXED ₹9 DELIVERY (NO EXTRA GST)
                 if (distance <= 1) {
                     deliveryCharge = 9;
                     deliveryInfo = "Fixed ₹9 delivery (GST included)";
-                    gstDelivery = 0; // GST already included in ₹9
+                    gstDelivery = 0;
                 }
                 // FREE DELIVERY FOR ORDERS ABOVE ₹199 WITHIN 4KM
                 else if (distance <= 4 && cartTotal > 199) {
@@ -439,23 +520,15 @@
                 }
                 // STANDARD DELIVERY CHARGES
                 else {
-                    // ₹6 per km for first 4km
                     let charge = 0;
                     if (distance <= 4) {
-                        charge = distance * 6;
+                        charge = distance * 6; // ₹6 per km
                     }
-                    // ₹8 per km for 4-8km
                     else if (distance <= 8) {
-                        charge = (4 * 6) + ((distance - 4) * 8);
+                        charge = (4 * 6) + ((distance - 4) * 8); // ₹8 per km for 4-8km
                     }
-                    // ₹10 per km for 8-10km
                     else if (distance <= 10) {
-                        charge = (4 * 6) + (4 * 8) + ((distance - 8) * 10);
-                    }
-                    // Beyond 10km - not delivering
-                    else {
-                        showError('Out of Range', 'Delivery not available', 'Your location is beyond 10km from outlet.');
-                        return false;
+                        charge = (4 * 6) + (4 * 8) + ((distance - 8) * 10); // ₹10 per km for 8-10km
                     }
                     
                     deliveryCharge = Math.ceil(charge);
@@ -468,7 +541,7 @@
             finalAmount = parseFloat((foodTotal + gstFood + deliveryCharge + gstDelivery).toFixed(2));
             
             if (finalAmount < 1) {
-                showError('Invalid Total', 'Invalid total amount', 'Please contact support.');
+                showNotification('error', 'Invalid total amount');
                 return false;
             }
             
@@ -492,16 +565,12 @@
                 }
             };
             
-            console.log("Order data loaded successfully");
-            console.log("Delivery Charge:", deliveryCharge);
-            console.log("GST on Delivery:", gstDelivery);
-            console.log("Total Amount:", finalAmount);
-            
+            console.log("Order loaded:", orderData);
             return true;
             
         } catch (error) {
-            console.error("Error loading order data:", error);
-            showError('Loading Error', 'Failed to load order data', 'Please refresh the page.');
+            console.error("Error loading order:", error);
+            showNotification('error', 'Failed to load order');
             return false;
         }
     }
@@ -510,12 +579,10 @@
         document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
         document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
         
-        // Show/hide delivery section
         if (deliveryMode === 'delivery') {
             document.getElementById('delivery-section').classList.remove('hidden');
             document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
             
-            // Special handling for ₹9 delivery (GST included)
             if (deliveryCharge === 9) {
                 document.getElementById('gst-delivery').textContent = '₹0.00 (Included in ₹9)';
             } else {
@@ -538,11 +605,6 @@
         if (!orderItems) return;
         
         orderItems.innerHTML = '';
-        
-        if (cart.length === 0) {
-            orderItems.innerHTML = '<p class="text-gray-500 text-center py-4">No items in cart</p>';
-            return;
-        }
         
         cart.forEach(item => {
             const itemDiv = document.createElement('div');
@@ -573,18 +635,6 @@
     function displayCustomerDetails(address, deliveryMode) {
         const customerDetails = document.getElementById('customer-details');
         if (!customerDetails) return;
-        
-        customerDetails.innerHTML = '';
-        
-        if (!address || !address.name) {
-            customerDetails.innerHTML = `
-                <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl">
-                    <p class="font-medium">⚠️ Customer details not found</p>
-                    <p class="text-sm mt-1">Please go back to address page</p>
-                </div>
-            `;
-            return;
-        }
         
         let detailsHTML = `
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -639,8 +689,6 @@
         const deliveryAddress = document.getElementById('delivery-address');
         if (!deliveryAddress) return;
         
-        deliveryAddress.innerHTML = '';
-        
         if (deliveryMode === 'delivery') {
             let addressHTML = `
                 <div class="bg-green-50 border border-green-200 rounded-xl p-4">
@@ -688,7 +736,6 @@
                     </div>`;
                 }
                 
-                // GOOGLE MAPS LINK FROM ADDRESS PAGE
                 if (delivery.location) {
                     const lat = delivery.location.lat;
                     const lng = delivery.location.lng;
@@ -700,12 +747,6 @@
                         </a>
                     </div>`;
                 }
-            } else {
-                addressHTML = `
-                    <div class="text-center py-4">
-                        <p class="text-red-500 font-medium">⚠️ Address details incomplete</p>
-                    </div>
-                `;
             }
             
             addressHTML += `</div>`;
@@ -742,21 +783,27 @@
         }
     }
     
-    // RAZORPAY PAYMENT
-    function initiateRazorpayPayment() {
+    // RAZORPAY PAYMENT - NO UPI VIBRATIONS
+    function initiatePayment() {
         if (paymentProcessing) {
-            showError('Payment in Progress', 'A payment is already in progress', 'Please wait.');
+            showNotification('error', 'Payment already in progress');
             return;
         }
         
-        if (!validatePaymentPrerequisites()) {
+        if (!orderData.address?.phone) {
+            showNotification('error', 'Phone number required');
+            return;
+        }
+        
+        if (finalAmount < 1) {
+            showNotification('error', 'Invalid payment amount');
             return;
         }
         
         paymentProcessing = true;
-        showLoading('Initializing Payment', 'Preparing secure payment gateway...');
+        showLoading();
         
-        // SIMPLE RAZORPAY OPTIONS
+        // SIMPLE RAZORPAY OPTIONS - NO COMPLEX WALLET SETTINGS
         const options = {
             key: RAZORPAY_KEY_ID,
             amount: Math.round(finalAmount * 100),
@@ -777,11 +824,10 @@
             modal: {
                 ondismiss: function() {
                     paymentProcessing = false;
-                    document.getElementById('retry-payment').classList.remove('hidden');
                     hideLoading();
+                    document.getElementById('retry-payment').classList.remove('hidden');
                 }
-            },
-            timeout: 300 // 5 minutes
+            }
         };
         
         try {
@@ -790,32 +836,20 @@
             rzp.on('payment.failed', function(response) {
                 paymentProcessing = false;
                 hideLoading();
-                showError('Payment Failed', 'Payment could not be processed', response.error.description || 'Unknown error');
+                showAlert('error-alert');
+                document.getElementById('error-details').textContent = response.error.description || 'Payment failed';
                 document.getElementById('retry-payment').classList.remove('hidden');
             });
             
             rzp.open();
             
         } catch (error) {
-            console.error("Razorpay initialization error:", error);
+            console.error("Razorpay error:", error);
             paymentProcessing = false;
             hideLoading();
-            showError('Connection Error', 'Unable to connect to payment gateway', 'Please check your internet connection.');
+            showAlert('error-alert');
+            document.getElementById('error-details').textContent = 'Unable to connect to payment gateway';
         }
-    }
-    
-    function validatePaymentPrerequisites() {
-        if (!orderData.address?.phone) {
-            showError('Missing Information', 'Phone number required', 'Please add your phone number for payment verification');
-            return false;
-        }
-        
-        if (finalAmount < 1) {
-            showError('Invalid Amount', 'Invalid payment amount', 'Please refresh page.');
-            return false;
-        }
-        
-        return true;
     }
     
     function handlePaymentSuccess(paymentId) {
@@ -823,7 +857,8 @@
         hideLoading();
         
         if (!paymentId) {
-            showError('Payment Error', 'Payment completed but no payment ID', 'Please contact support.');
+            showAlert('error-alert');
+            document.getElementById('error-details').textContent = 'No payment ID received';
             return;
         }
         
@@ -839,8 +874,8 @@
             paymentId: paymentId,
             otp: otp,
             amount: finalAmount,
-            customer: orderData.address.name || 'Customer',
-            phone: orderData.address.phone || '',
+            customer: orderData.address.name,
+            phone: orderData.address.phone,
             items: orderData.cart.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
@@ -859,10 +894,12 @@
         
         saveOrderAndProceed(order, otp);
         sendOrderToWhatsApp(order);
-        showSuccess(otp);
+        document.getElementById('generated-otp').textContent = otp;
+        showAlert('success-alert');
+        showNotification('success');
     }
     
-    // WHATSAPP MESSAGE TO RESTAURANT (YOUR NUMBER)
+    // WHATSAPP MESSAGE
     function sendOrderToWhatsApp(order) {
         let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
         
@@ -886,17 +923,14 @@
         
         message += `*PAYMENT BREAKDOWN:*%0A`;
         message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `Food Total: ₹${order.totals?.foodTotal?.toFixed(2) || 0}%0A`;
+        message += `Food Total: ₹${order.totals.foodTotal.toFixed(2)}%0A`;
+        message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
         
-        if (order.totals?.gstFood > 0) {
-            message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
-        }
-        
-        if (order.deliveryMode === 'delivery' && order.totals?.deliveryCharge > 0) {
+        if (order.deliveryMode === 'delivery') {
             message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
-            if (order.totals?.deliveryCharge === 9) {
+            if (order.totals.deliveryCharge === 9) {
                 message += `GST on Delivery: Included in ₹9%0A`;
-            } else if (order.totals?.gstDelivery > 0) {
+            } else {
                 message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
             }
         }
@@ -909,7 +943,6 @@
         message += `📱 Phone: ${order.phone}%0A`;
         message += `💳 Payment: Razorpay (Online)%0A%0A`;
         
-        // DELIVERY/Takeaway INFO WITH MAP LINK
         if (order.deliveryMode === 'delivery') {
             message += `*📍 DELIVERY ADDRESS:*%0A`;
             message += `━━━━━━━━━━━━━━━━━━%0A`;
@@ -929,120 +962,76 @@
                 message += `Distance: ${order.delivery.distance} km%0A`;
             }
             
-            // MAP LINK
             if (order.delivery?.location) {
                 const lat = order.delivery.location.lat;
                 const lng = order.delivery.location.lng;
                 message += `📍 Maps: https://maps.google.com/?q=${lat},${lng}%0A`;
             }
-            
-            if (order.address.addressType) {
-                message += `Type: ${order.address.addressType}%0A`;
-            }
         } else {
             message += `*🏪 PICKUP DETAILS:*%0A`;
-            message += `━━━━━━━━━━━━━━━━━━%0A`;
             message += `Prime Square, Omaxe City 1, Indore%0A`;
             message += `📍 Maps: https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8%0A`;
-            message += `Timings: 5:45 PM - 11:30 PM%0A`;
-            message += `Customer: ${order.customer}%0A`;
-            message += `Phone: ${order.phone}%0A`;
-            message += `📋 OTP verification required at pickup%0A`;
         }
         
-        message += `%0A*📅 ORDER TIME:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `⏰ ${new Date().toLocaleTimeString()}%0A`;
-        message += `📅 ${new Date().toLocaleDateString()}%0A%0A`;
-        
-        message += `_Order placed via EasyGo Payment System_`;
+        message += `%0A*📅 ORDER TIME:* ${new Date().toLocaleString()}%0A`;
         
         const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${message}`;
         
-        // Open WhatsApp in background after short delay
         setTimeout(() => {
             window.open(whatsappURL, '_blank');
-        }, 1000);
+        }, 500);
     }
     
     // SAVE ORDER
     function saveOrderAndProceed(order, otp) {
         try {
-            // Save to easygo-orders (all orders history)
-            let orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
-            orders.push(order);
-            localStorage.setItem('easygo-orders', JSON.stringify(orders));
+            // Save to all storages
+            localStorage.setItem('easygo-otp', otp);
+            localStorage.setItem('easygo-order-id', order.id);
+            localStorage.setItem('easygo-last-order', JSON.stringify(order));
+            localStorage.setItem('easygo-last-payment-id', order.paymentId);
             
-            // Save to easygo-active-orders (current active orders)
+            // Save to active orders
             let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
-            const activeOrder = {
+            activeOrders.push({
                 orderId: order.id,
                 razorpayPaymentId: order.paymentId,
                 customerName: order.customer,
                 customerPhone: order.phone,
                 totalAmount: order.amount,
-                items: order.items.map(item => ({
-                    name: item.name,
-                    quantity: item.quantity,
-                    pack: item.pack,
-                    unitPrice: item.unitPrice,
-                    total: item.total
-                })),
+                items: order.items,
                 address: order.deliveryMode === 'delivery' ? 
                     `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
-                    "Takeaway - Prime Square, Omaxe City 1, Indore",
+                    "Takeaway - Prime Square",
                 deliveryMode: order.deliveryMode,
                 status: 'confirmed',
                 timestamp: order.timestamp,
-                paymentMethod: order.paymentMethod,
-                paymentId: order.paymentId,
                 otp: otp,
-                deliveryPartner: "",
-                deliveryPartnerPhone: "",
                 completeAddress: order.address,
-                deliveryDetails: order.delivery,
-                orderSummary: order.totals
-            };
-            activeOrders.push(activeOrder);
+                deliveryDetails: order.delivery
+            });
             localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
             
-            // Save to EasyGo-Delivery (Rider App)
+            // Save to delivery orders for rider app
             let deliveryOrders = JSON.parse(localStorage.getItem('easygo-delivery-orders') || '[]');
-            const deliveryOrder = {
+            deliveryOrders.push({
                 orderId: order.id,
                 customerName: order.customer,
                 customerPhone: order.phone,
                 amount: order.amount,
                 otp: otp,
                 address: order.deliveryMode === 'delivery' ? 
-                    `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.street || ''}, ${order.address?.city || 'Indore'}` : 
+                    `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
                     "Takeaway",
                 deliveryMode: order.deliveryMode,
                 status: 'pending',
-                timestamp: order.timestamp,
-                mapLink: order.delivery?.location ? 
-                    `https://maps.google.com/?q=${order.delivery.location.lat},${order.delivery.location.lng}` : 
-                    "https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8",
-                items: order.items.map(item => `${item.name} × ${item.quantity}`).join(', ')
-            };
-            deliveryOrders.push(deliveryOrder);
+                timestamp: order.timestamp
+            });
             localStorage.setItem('easygo-delivery-orders', JSON.stringify(deliveryOrders));
             
-            // Save individual values
-            localStorage.setItem('easygo-otp', otp);
-            localStorage.setItem('easygo-order-id', order.id);
-            localStorage.setItem('easygo-delivery-mode', order.deliveryMode);
-            localStorage.setItem('easygo-last-order', JSON.stringify(order));
-            localStorage.setItem('easygo-last-payment-id', order.paymentId);
-            localStorage.setItem('easygo-last-payment-amount', order.amount.toString());
-            
-            // Clear cart but keep address for future orders
+            // Clear cart
             localStorage.removeItem('easygo-cart');
             localStorage.removeItem('easygo-cart-items-total');
-            
-            // Don't clear delivery data - keep for future orders
-            
-            console.log("Order saved successfully");
             
         } catch (error) {
             console.error("Error saving order:", error);
@@ -1055,23 +1044,13 @@
     
     // INITIALIZATION
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("Payment page loaded");
-        
         if (!loadOrderData()) {
             return;
         }
         
-        setupEventListeners();
+        // Setup event listeners
+        document.getElementById('razorpay-pay-btn').addEventListener('click', initiatePayment);
     });
-    
-    function setupEventListeners() {
-        document.getElementById('razorpay-pay-btn').addEventListener('click', initiateRazorpayPayment);
-        
-        document.getElementById('retry-payment').addEventListener('click', function() {
-            this.classList.add('hidden');
-            initiateRazorpayPayment();
-        });
-    }
 </script>
     
 </body>
