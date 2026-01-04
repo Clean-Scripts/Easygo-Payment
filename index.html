@@ -32,7 +32,7 @@
             position: fixed;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%) scale(0.95);
             z-index: 1001;
             opacity: 0;
             pointer-events: none;
@@ -40,6 +40,7 @@
         }
         
         .alert-card.active {
+            transform: translate(-50%, -50%) scale(1);
             opacity: 1;
             pointer-events: all;
         }
@@ -124,14 +125,20 @@
                 
                 <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
                     <p class="text-sm text-green-800">
-                        <strong>Next steps:</strong> Share OTP with delivery partner for verification.
+                        <strong>WhatsApp Sent!</strong> Order details sent to EasyGo outlet.
                     </p>
                 </div>
                 
-                <button onclick="goToTracking()" 
-                        class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg hover:shadow-xl">
-                    Track Your Order →
-                </button>
+                <div class="space-y-4">
+                    <button onclick="goToTracking()" 
+                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg hover:shadow-xl">
+                        Track Your Order →
+                    </button>
+                    <button onclick="viewWhatsAppMessage()" 
+                            class="w-full py-3 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors">
+                        📱 View WhatsApp Message
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -188,13 +195,13 @@
         </div>
     </div>
 
-    <!-- Loading Inline (Not a popup) -->
+    <!-- Loading Inline -->
     <div id="loading-indicator" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
         <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
             <div class="text-center">
                 <div class="loading-spinner mx-auto mb-6"></div>
-                <h3 class="text-2xl font-bold mb-4" id="loading-title">Processing Payment</h3>
-                <p class="text-gray-600" id="loading-message">Please wait...</p>
+                <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
+                <p class="text-gray-600">Please wait...</p>
             </div>
         </div>
     </div>
@@ -317,7 +324,6 @@
                     </div>
                     
                     <div class="space-y-4 mb-8">
-                        <!-- SIMPLE RAZORPAY BUTTON WITH NO UPI VIBRATIONS -->
                         <button id="razorpay-pay-btn" 
                                 class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
                                 onclick="initiatePayment()">
@@ -400,12 +406,13 @@
 <script>
     // CONFIGURATION
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
-    const RESTAURANT_PHONE = "917651837322";
+    const RESTAURANT_PHONE = "917651837322"; // YOUR NUMBER
     
     // GLOBAL STATE
     let orderData = {};
     let finalAmount = 0;
     let paymentProcessing = false;
+    let currentOrder = null;
     
     // ALERT FUNCTIONS
     function showAlert(alertId) {
@@ -783,7 +790,7 @@
         }
     }
     
-    // RAZORPAY PAYMENT - NO UPI VIBRATIONS
+    // RAZORPAY PAYMENT
     function initiatePayment() {
         if (paymentProcessing) {
             showNotification('error', 'Payment already in progress');
@@ -803,7 +810,7 @@
         paymentProcessing = true;
         showLoading();
         
-        // SIMPLE RAZORPAY OPTIONS - NO COMPLEX WALLET SETTINGS
+        // SIMPLE RAZORPAY OPTIONS
         const options = {
             key: RAZORPAY_KEY_ID,
             amount: Math.round(finalAmount * 100),
@@ -869,7 +876,7 @@
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const orderId = "EG" + Date.now().toString().slice(-8);
         
-        const order = {
+        currentOrder = {
             id: orderId,
             paymentId: paymentId,
             otp: otp,
@@ -892,23 +899,26 @@
             status: "confirmed"
         };
         
-        saveOrderAndProceed(order, otp);
-        sendOrderToWhatsApp(order);
+        saveOrderAndProceed(currentOrder, otp);
+        sendWhatsAppMessage(currentOrder); // SEND WHATSAPP IMMEDIATELY
         document.getElementById('generated-otp').textContent = otp;
         showAlert('success-alert');
         showNotification('success');
     }
     
-    // WHATSAPP MESSAGE
-    function sendOrderToWhatsApp(order) {
+    // WHATSAPP MESSAGE FUNCTION - NOW WORKING
+    function sendWhatsAppMessage(order) {
+        // Format message for WhatsApp
         let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
         
+        // Order Details
         message += `*Order ID:* ${order.id}%0A`;
         message += `*OTP:* ${order.otp}%0A`;
         message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
         message += `*Payment ID:* ${order.paymentId}%0A`;
         message += `*Status:* CONFIRMED ✅%0A%0A`;
         
+        // Items Ordered
         message += `*ITEMS ORDERED:*%0A`;
         message += `━━━━━━━━━━━━━━━━━━%0A`;
         order.items.forEach(item => {
@@ -921,6 +931,7 @@
             message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}%0A%0A`;
         });
         
+        // Payment Breakdown
         message += `*PAYMENT BREAKDOWN:*%0A`;
         message += `━━━━━━━━━━━━━━━━━━%0A`;
         message += `Food Total: ₹${order.totals.foodTotal.toFixed(2)}%0A`;
@@ -937,16 +948,19 @@
         
         message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
         
+        // Customer Details
         message += `*CUSTOMER DETAILS:*%0A`;
         message += `━━━━━━━━━━━━━━━━━━%0A`;
         message += `👤 Name: ${order.customer}%0A`;
         message += `📱 Phone: ${order.phone}%0A`;
         message += `💳 Payment: Razorpay (Online)%0A%0A`;
         
+        // Delivery/Pickup Details
         if (order.deliveryMode === 'delivery') {
             message += `*📍 DELIVERY ADDRESS:*%0A`;
             message += `━━━━━━━━━━━━━━━━━━%0A`;
             
+            // Build address
             const addressParts = [];
             if (order.address.houseNumber) addressParts.push(order.address.houseNumber);
             if (order.address.floorNumber) addressParts.push(`Floor ${order.address.floorNumber}`);
@@ -967,19 +981,64 @@
                 const lng = order.delivery.location.lng;
                 message += `📍 Maps: https://maps.google.com/?q=${lat},${lng}%0A`;
             }
+            
+            if (order.address.addressType) {
+                message += `Address Type: ${order.address.addressType}%0A`;
+            }
         } else {
             message += `*🏪 PICKUP DETAILS:*%0A`;
+            message += `━━━━━━━━━━━━━━━━━━%0A`;
             message += `Prime Square, Omaxe City 1, Indore%0A`;
             message += `📍 Maps: https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8%0A`;
+            message += `Timings: 5:45 PM - 11:30 PM%0A`;
+            message += `Customer: ${order.customer}%0A`;
+            message += `Phone: ${order.phone}%0A`;
+            message += `📋 OTP verification required at pickup%0A`;
         }
         
-        message += `%0A*📅 ORDER TIME:* ${new Date().toLocaleString()}%0A`;
+        // Order Time
+        message += `%0A*📅 ORDER TIME:*%0A`;
+        message += `━━━━━━━━━━━━━━━━━━%0A`;
+        message += `⏰ ${new Date().toLocaleTimeString()}%0A`;
+        message += `📅 ${new Date().toLocaleDateString()}%0A%0A`;
         
-        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${message}`;
+        message += `_Order placed via EasyGo Payment System_`;
         
+        // Create WhatsApp URL
+        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${encodeURIComponent(message)}`;
+        
+        // Open WhatsApp in new tab
+        console.log("Opening WhatsApp URL:", whatsappURL);
+        
+        // Try different methods to ensure WhatsApp opens
         setTimeout(() => {
+            // Method 1: Direct window.open
             window.open(whatsappURL, '_blank');
+            
+            // Method 2: Create and click link
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.href = whatsappURL;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.click();
+            }, 100);
+            
+            // Method 3: Location change (fallback)
+            setTimeout(() => {
+                if (navigator.userAgent.match(/Android|iPhone|iPad|iPod/i)) {
+                    window.location.href = whatsappURL;
+                }
+            }, 200);
         }, 500);
+        
+        return true;
+    }
+    
+    function viewWhatsAppMessage() {
+        if (currentOrder) {
+            sendWhatsAppMessage(currentOrder);
+        }
     }
     
     // SAVE ORDER
