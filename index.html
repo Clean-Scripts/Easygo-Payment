@@ -123,20 +123,23 @@
                     XXX XXX
                 </div>
                 
-                <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
-                    <p class="text-sm text-green-800">
-                        <strong>WhatsApp Sent!</strong> Order details sent to EasyGo outlet.
+                <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-6">
+                    <p class="text-yellow-800 font-bold mb-2">⚠️ IMPORTANT NOTICE:</p>
+                    <p class="text-sm text-yellow-700">
+                        <strong>You MUST send the WhatsApp message</strong> to complete your order.
+                        <br>Order will NOT be delivered without WhatsApp confirmation.
                     </p>
                 </div>
                 
                 <div class="space-y-4">
-                    <button onclick="goToTracking()" 
-                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg hover:shadow-xl">
-                        Track Your Order →
+                    <button onclick="sendWhatsAppNow()" 
+                            class="w-full py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
+                        <span>📱 Send WhatsApp Now</span>
                     </button>
-                    <button onclick="viewWhatsAppMessage()" 
-                            class="w-full py-3 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors">
-                        📱 View WhatsApp Message
+                    
+                    <button onclick="goToTracking()" 
+                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors">
+                        Track Your Order →
                     </button>
                 </div>
             </div>
@@ -334,6 +337,13 @@
                             Pay Now - ₹<span id="pay-amount">0</span>
                         </button>
                         
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
+                            <p class="text-yellow-800 text-sm font-medium">
+                                ⚠️ <strong>Important:</strong> After payment, you MUST send the WhatsApp message 
+                                to complete your order. Order will NOT be delivered without WhatsApp confirmation.
+                            </p>
+                        </div>
+                        
                         <div class="text-center pt-4">
                             <div class="inline-flex items-center justify-center space-x-3 text-sm text-gray-600 bg-gray-50 px-6 py-3 rounded-full">
                                 <span class="flex items-center">
@@ -406,13 +416,14 @@
 <script>
     // CONFIGURATION
     const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
-    const RESTAURANT_PHONE = "917651837322"; // YOUR NUMBER
+    const RESTAURANT_PHONE = "917651837322";
     
     // GLOBAL STATE
     let orderData = {};
     let finalAmount = 0;
     let paymentProcessing = false;
     let currentOrder = null;
+    let whatsappSent = false;
     
     // ALERT FUNCTIONS
     function showAlert(alertId) {
@@ -896,69 +907,104 @@
             delivery: orderData.delivery,
             timestamp: new Date().toISOString(),
             paymentMethod: "razorpay",
-            status: "confirmed"
+            status: "pending_whatsapp" // Changed to pending until WhatsApp sent
         };
         
         saveOrderAndProceed(currentOrder, otp);
-        sendWhatsAppMessage(currentOrder); // SEND WHATSAPP IMMEDIATELY
         document.getElementById('generated-otp').textContent = otp;
         showAlert('success-alert');
         showNotification('success');
+        
+        // Auto-send WhatsApp after 1 second
+        setTimeout(() => {
+            sendWhatsAppNow();
+        }, 1000);
     }
     
-    // WHATSAPP MESSAGE FUNCTION - NOW WORKING
-    function sendWhatsAppMessage(order) {
-        // Format message for WhatsApp
-        let message = `📦 *NEW ORDER RECEIVED* 📦%0A%0A`;
+    // WHATSAPP MESSAGE FUNCTION - FIXED EMOJI ENCODING
+    function sendWhatsAppNow() {
+        if (!currentOrder) {
+            showNotification('error', 'No order found');
+            return false;
+        }
+        
+        // Create WhatsApp message with properly encoded emojis
+        let message = createWhatsAppMessage(currentOrder);
+        
+        // Create WhatsApp URL with proper encoding
+        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${encodeURIComponent(message)}`;
+        
+        // Open WhatsApp
+        window.open(whatsappURL, '_blank', 'noopener,noreferrer');
+        
+        // Mark WhatsApp as sent and update order status
+        whatsappSent = true;
+        currentOrder.status = "confirmed";
+        currentOrder.whatsappSent = true;
+        currentOrder.whatsappSentTime = new Date().toISOString();
+        
+        // Update localStorage with new status
+        saveOrderAndProceed(currentOrder, currentOrder.otp);
+        
+        showNotification('success', 'WhatsApp sent successfully');
+        return true;
+    }
+    
+    function createWhatsAppMessage(order) {
+        // Use proper UTF-8 emojis directly in the string
+        let message = "";
+        
+        // Header with emojis
+        message += "📦 *NEW ORDER RECEIVED* 📦\n\n";
         
         // Order Details
-        message += `*Order ID:* ${order.id}%0A`;
-        message += `*OTP:* ${order.otp}%0A`;
-        message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
-        message += `*Payment ID:* ${order.paymentId}%0A`;
-        message += `*Status:* CONFIRMED ✅%0A%0A`;
+        message += `*Order ID:* ${order.id}\n`;
+        message += `*OTP:* ${order.otp}\n`;
+        message += `*Amount:* ₹${order.amount.toFixed(2)}\n`;
+        message += `*Payment ID:* ${order.paymentId}\n`;
+        message += `*Status:* CONFIRMED ✅\n\n`;
         
         // Items Ordered
-        message += `*ITEMS ORDERED:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
+        message += `*ITEMS ORDERED:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
         order.items.forEach(item => {
             const quantity = parseInt(item.quantity) || 1;
             const unitPrice = parseFloat(item.unitPrice) || 0;
             const totalPrice = parseFloat(item.total) || (unitPrice * quantity);
             
-            message += `• ${item.name} × ${quantity}%0A`;
-            message += `  Pack: ${item.pack || 'Standard'}%0A`;
-            message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}%0A%0A`;
+            message += `• ${item.name} × ${quantity}\n`;
+            message += `  Pack: ${item.pack || 'Standard'}\n`;
+            message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}\n\n`;
         });
         
         // Payment Breakdown
-        message += `*PAYMENT BREAKDOWN:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `Food Total: ₹${order.totals.foodTotal.toFixed(2)}%0A`;
-        message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}%0A`;
+        message += `*PAYMENT BREAKDOWN:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        message += `Food Total: ₹${order.totals.foodTotal.toFixed(2)}\n`;
+        message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}\n`;
         
         if (order.deliveryMode === 'delivery') {
-            message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}%0A`;
+            message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}\n`;
             if (order.totals.deliveryCharge === 9) {
-                message += `GST on Delivery: Included in ₹9%0A`;
+                message += `GST on Delivery: Included in ₹9\n`;
             } else {
-                message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}%0A`;
+                message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}\n`;
             }
         }
         
-        message += `*TOTAL: ₹${order.amount.toFixed(2)}*%0A%0A`;
+        message += `*TOTAL: ₹${order.amount.toFixed(2)}*\n\n`;
         
         // Customer Details
-        message += `*CUSTOMER DETAILS:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `👤 Name: ${order.customer}%0A`;
-        message += `📱 Phone: ${order.phone}%0A`;
-        message += `💳 Payment: Razorpay (Online)%0A%0A`;
+        message += `*CUSTOMER DETAILS:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        message += `👤 Name: ${order.customer}\n`;
+        message += `📱 Phone: ${order.phone}\n`;
+        message += `💳 Payment: Razorpay (Online)\n\n`;
         
         // Delivery/Pickup Details
         if (order.deliveryMode === 'delivery') {
-            message += `*📍 DELIVERY ADDRESS:*%0A`;
-            message += `━━━━━━━━━━━━━━━━━━%0A`;
+            message += `*📍 DELIVERY ADDRESS:*\n`;
+            message += `━━━━━━━━━━━━━━━━━━\n`;
             
             // Build address
             const addressParts = [];
@@ -970,75 +1016,44 @@
             if (order.address.state) addressParts.push(order.address.state);
             if (order.address.pincode) addressParts.push(order.address.pincode);
             
-            message += addressParts.join(', ') + '%0A';
+            message += addressParts.join(', ') + '\n';
             
             if (order.delivery?.distance) {
-                message += `Distance: ${order.delivery.distance} km%0A`;
+                message += `Distance: ${order.delivery.distance} km\n`;
             }
             
             if (order.delivery?.location) {
                 const lat = order.delivery.location.lat;
                 const lng = order.delivery.location.lng;
-                message += `📍 Maps: https://maps.google.com/?q=${lat},${lng}%0A`;
+                message += `📍 Maps: https://maps.google.com/?q=${lat},${lng}\n`;
             }
             
             if (order.address.addressType) {
-                message += `Address Type: ${order.address.addressType}%0A`;
+                message += `Address Type: ${order.address.addressType}\n`;
             }
         } else {
-            message += `*🏪 PICKUP DETAILS:*%0A`;
-            message += `━━━━━━━━━━━━━━━━━━%0A`;
-            message += `Prime Square, Omaxe City 1, Indore%0A`;
-            message += `📍 Maps: https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8%0A`;
-            message += `Timings: 5:45 PM - 11:30 PM%0A`;
-            message += `Customer: ${order.customer}%0A`;
-            message += `Phone: ${order.phone}%0A`;
-            message += `📋 OTP verification required at pickup%0A`;
+            message += `*🏪 PICKUP DETAILS:*\n`;
+            message += `Prime Square, Omaxe City 1, Indore\n`;
+            message += `📍 Maps: https://maps.app.goo.gl/kz2BKTUPpuyHC6Jr8\n`;
+            message += `Timings: 5:45 PM - 11:30 PM\n`;
+            message += `Customer: ${order.customer}\n`;
+            message += `Phone: ${order.phone}\n`;
+            message += `📋 OTP verification required at pickup\n`;
         }
         
         // Order Time
-        message += `%0A*📅 ORDER TIME:*%0A`;
-        message += `━━━━━━━━━━━━━━━━━━%0A`;
-        message += `⏰ ${new Date().toLocaleTimeString()}%0A`;
-        message += `📅 ${new Date().toLocaleDateString()}%0A%0A`;
+        message += `\n*📅 ORDER TIME:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        message += `⏰ ${new Date().toLocaleTimeString()}\n`;
+        message += `📅 ${new Date().toLocaleDateString()}\n\n`;
+        
+        // Important Notice
+        message += `⚠️ *IMPORTANT:* Customer has been instructed to send this message.\n`;
+        message += `Order will not be delivered without WhatsApp confirmation.\n\n`;
         
         message += `_Order placed via EasyGo Payment System_`;
         
-        // Create WhatsApp URL
-        const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${encodeURIComponent(message)}`;
-        
-        // Open WhatsApp in new tab
-        console.log("Opening WhatsApp URL:", whatsappURL);
-        
-        // Try different methods to ensure WhatsApp opens
-        setTimeout(() => {
-            // Method 1: Direct window.open
-            window.open(whatsappURL, '_blank');
-            
-            // Method 2: Create and click link
-            setTimeout(() => {
-                const link = document.createElement('a');
-                link.href = whatsappURL;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.click();
-            }, 100);
-            
-            // Method 3: Location change (fallback)
-            setTimeout(() => {
-                if (navigator.userAgent.match(/Android|iPhone|iPad|iPod/i)) {
-                    window.location.href = whatsappURL;
-                }
-            }, 200);
-        }, 500);
-        
-        return true;
-    }
-    
-    function viewWhatsAppMessage() {
-        if (currentOrder) {
-            sendWhatsAppMessage(currentOrder);
-        }
+        return message;
     }
     
     // SAVE ORDER
@@ -1052,6 +1067,10 @@
             
             // Save to active orders
             let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+            
+            // Remove existing order if exists
+            activeOrders = activeOrders.filter(o => o.orderId !== order.id);
+            
             activeOrders.push({
                 orderId: order.id,
                 razorpayPaymentId: order.paymentId,
@@ -1063,9 +1082,11 @@
                     `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
                     "Takeaway - Prime Square",
                 deliveryMode: order.deliveryMode,
-                status: 'confirmed',
+                status: order.status || 'confirmed',
                 timestamp: order.timestamp,
                 otp: otp,
+                whatsappSent: order.whatsappSent || false,
+                whatsappSentTime: order.whatsappSentTime || null,
                 completeAddress: order.address,
                 deliveryDetails: order.delivery
             });
@@ -1083,8 +1104,9 @@
                     `${order.address?.houseNumber || ''}, ${order.address?.locality || ''}, ${order.address?.city || 'Indore'}` : 
                     "Takeaway",
                 deliveryMode: order.deliveryMode,
-                status: 'pending',
-                timestamp: order.timestamp
+                status: order.whatsappSent ? 'pending' : 'pending_whatsapp',
+                timestamp: order.timestamp,
+                whatsappSent: order.whatsappSent || false
             });
             localStorage.setItem('easygo-delivery-orders', JSON.stringify(deliveryOrders));
             
@@ -1098,6 +1120,13 @@
     }
     
     function goToTracking() {
+        if (!whatsappSent) {
+            const confirmGo = confirm("⚠️ You haven't sent the WhatsApp message!\n\nYour order will NOT be delivered without WhatsApp confirmation.\n\nAre you sure you want to continue?");
+            if (!confirmGo) {
+                sendWhatsAppNow();
+                return;
+            }
+        }
         window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
     }
     
