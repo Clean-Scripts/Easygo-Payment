@@ -334,8 +334,7 @@
                         
                         <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
                             <p class="text-yellow-800 text-sm font-medium">
-                                ⚠️ <strong>Important:</strong> After payment, you MUST send the WhatsApp message 
-                                to complete your order. Order will NOT be delivered without WhatsApp confirmation.
+                                ⚠️ <strong>Important:</strong> After payment, you MUST send the WhatsApp Message to complete your order. Order will NOT be Delivered without WhatsApp Confirmation.
                             </p>
                         </div>
                         
@@ -429,15 +428,20 @@ let paymentProcessing = false;
 let currentOrder = null;
 let whatsappSent = false;
 
-// Razorpay Configuration
-const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
+// Razorpay Configuration - Using TEST key instead of live
+const RAZORPAY_KEY_ID = "rzp_test_Y4gtfBQaYVgB9I"; // Changed to test key for now
 const RESTAURANT_PHONE = "917651837322";
 
 // ==================== FIREBASE FUNCTIONS ====================
 function initializeFirebase() {
     try {
-        const app = firebase.initializeApp(firebaseConfig);
-        database = firebase.database();
+        // Check if Firebase is already initialized
+        if (!firebase.apps.length) {
+            const app = firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+        } else {
+            database = firebase.database();
+        }
         
         // Monitor connection status
         const connectedRef = database.ref(".info/connected");
@@ -481,7 +485,8 @@ async function saveOrderToFirebase(orderData) {
     }
     
     try {
-        const orderId = orderData.orderId || `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        // Generate unique order ID
+        const orderId = `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
         
         // Prepare complete order data
         const firebaseOrderData = {
@@ -525,7 +530,6 @@ async function updateOrderPaymentStatus(orderId, paymentData) {
             razorpayPaymentId: paymentData.razorpayPaymentId,
             updatedAt: Date.now(),
             status: 'confirmed', // Move to confirmed after payment
-            timeline: firebase.database.ServerValue.TIMESTAMP // Add to timeline
         });
         
         // Add payment confirmation to timeline
@@ -914,8 +918,13 @@ async function initiatePayment() {
     showLoading();
     
     try {
-        // First save order to Firebase (with pending status)
+        // Generate order ID before payment
+        const orderId = `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        const orderDescription = `Order from ${orderData.address.name || 'Customer'}`;
+        
+        // Save order to Firebase first (with pending status)
         const firebaseOrderId = await saveOrderToFirebase({
+            orderId: orderId,
             customerPhone: orderData.address.phone,
             customerName: orderData.address.name,
             items: orderData.cart.map(item => ({
@@ -930,7 +939,8 @@ async function initiatePayment() {
                 `${orderData.address.houseNumber || ''}, ${orderData.address.locality || ''}, ${orderData.address.city || 'Indore'}` : 
                 "Takeaway - Prime Square",
             totalAmount: finalAmount,
-            totals: orderData.totals
+            totals: orderData.totals,
+            description: orderDescription
         });
         
         if (!firebaseOrderId) {
@@ -940,22 +950,28 @@ async function initiatePayment() {
         // Store Firebase order ID
         localStorage.setItem('easygo-firebase-order-id', firebaseOrderId);
         
-        // Create Razorpay order
+        // Create Razorpay order options
         const options = {
             key: RAZORPAY_KEY_ID,
-            amount: Math.round(finalAmount * 100),
+            amount: Math.round(finalAmount * 100), // Convert to paise
             currency: "INR",
-            name: "Easy Go",
-            description: `Order Payment - ${orderData.address.name}`,
+            name: "Easy Go Restaurant",
+            description: orderDescription,
+            order_id: null, // We'll get this from Razorpay
+            handler: async function(response) {
+                // Payment success handler
+                await handlePaymentSuccess(response, firebaseOrderId);
+            },
             prefill: {
                 name: orderData.address.name || "Customer",
-                contact: orderData.address.phone || "",
-                email: "customer@easygo.com"
+                email: orderData.address.email || "customer@easygo.com",
+                contact: orderData.address.phone || ""
             },
-            handler: async function(response) {
-                await handlePaymentSuccess(response.razorpay_payment_id, firebaseOrderId);
+            notes: {
+                order_id: orderId,
+                firebase_order_id: firebaseOrderId
             },
-            theme: { 
+            theme: {
                 color: "#10B981"
             },
             modal: {
@@ -963,48 +979,82 @@ async function initiatePayment() {
                     paymentProcessing = false;
                     hideLoading();
                     document.getElementById('retry-payment').classList.remove('hidden');
+                    showNotification('info', 'Payment cancelled by user');
                 }
             }
         };
         
+        // Create Razorpay instance
         const rzp = new Razorpay(options);
         
+        // Handle payment failure
         rzp.on('payment.failed', async function(response) {
             paymentProcessing = false;
             hideLoading();
             
+            console.error('Payment failed:', response.error);
+            
             // Update Firebase with failed status
             if (firebaseOrderId) {
-                await database.ref(`orders/${firebaseOrderId}`).update({
-                    paymentStatus: 'failed',
-                    paymentError: response.error.description,
-                    updatedAt: Date.now()
-                });
+                try {
+                    await database.ref(`orders/${firebaseOrderId}`).update({
+                        paymentStatus: 'failed',
+                        paymentError: response.error.description || 'Unknown error',
+                        updatedAt: Date.now(),
+                        status: 'failed'
+                    });
+                    
+                    // Add to timeline
+                    await database.ref(`orders/${firebaseOrderId}/timeline`).push({
+                        status: 'payment_failed',
+                        message: `Payment failed: ${response.error.description}`,
+                        timestamp: Date.now()
+                    });
+                } catch (error) {
+                    console.error("Error updating failed payment:", error);
+                }
             }
             
+            // Show error alert
             showAlert('error-alert');
-            document.getElementById('error-details').textContent = response.error.description || 'Payment failed';
+            document.getElementById('error-details').textContent = response.error.description || 'Payment failed. Please try again.';
             document.getElementById('retry-payment').classList.remove('hidden');
         });
         
+        // Open Razorpay checkout
         rzp.open();
         
     } catch (error) {
         console.error("Payment initiation error:", error);
         paymentProcessing = false;
         hideLoading();
+        
+        // Show error alert with specific message
         showAlert('error-alert');
-        document.getElementById('error-details').textContent = 'Unable to connect to payment gateway';
+        let errorMsg = 'Unable to process payment. ';
+        
+        if (error.message.includes('key_id')) {
+            errorMsg += 'Invalid Razorpay key. Please contact support.';
+        } else if (error.message.includes('network')) {
+            errorMsg += 'Network error. Please check your internet connection.';
+        } else {
+            errorMsg += 'Please try again or contact support.';
+        }
+        
+        document.getElementById('error-details').textContent = errorMsg;
     }
 }
 
-async function handlePaymentSuccess(paymentId, firebaseOrderId) {
+async function handlePaymentSuccess(response, firebaseOrderId) {
+    console.log('Payment success response:', response);
+    
+    // Hide loading first
     paymentProcessing = false;
     hideLoading();
     
-    if (!paymentId || !firebaseOrderId) {
+    if (!response.razorpay_payment_id) {
         showAlert('error-alert');
-        document.getElementById('error-details').textContent = 'No payment ID received';
+        document.getElementById('error-details').textContent = 'No payment ID received from Razorpay';
         return;
     }
     
@@ -1015,8 +1065,10 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId) {
         // Update Firebase with successful payment
         const paymentUpdated = await updateOrderPaymentStatus(firebaseOrderId, {
             status: 'success',
-            paymentId: paymentId,
-            razorpayPaymentId: paymentId
+            paymentId: response.razorpay_payment_id,
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpayOrderId: response.razorpay_order_id,
+            razorpaySignature: response.razorpay_signature
         });
         
         if (!paymentUpdated) {
@@ -1027,13 +1079,21 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId) {
         await database.ref(`orders/${firebaseOrderId}`).update({
             status: 'confirmed',
             otp: otp,
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            paymentVerified: true
+        });
+        
+        // Add OTP to timeline
+        await database.ref(`orders/${firebaseOrderId}/timeline`).push({
+            status: 'otp_generated',
+            message: `OTP generated for delivery: ${otp}`,
+            timestamp: Date.now()
         });
         
         // Create complete order object for local storage
         currentOrder = {
             id: firebaseOrderId,
-            paymentId: paymentId,
+            paymentId: response.razorpay_payment_id,
             otp: otp,
             amount: finalAmount,
             customer: orderData.address.name,
@@ -1051,14 +1111,15 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId) {
             delivery: orderData.delivery,
             timestamp: new Date().toISOString(),
             paymentMethod: "razorpay",
-            status: "pending_whatsapp"
+            status: "confirmed",
+            whatsappRequired: true
         };
         
         // Save to localStorage for backup and track page
         localStorage.setItem('easygo-otp', otp);
         localStorage.setItem('easygo-order-id', firebaseOrderId);
         localStorage.setItem('easygo-last-order', JSON.stringify(currentOrder));
-        localStorage.setItem('easygo-last-payment-id', paymentId);
+        localStorage.setItem('easygo-last-payment-id', response.razorpay_payment_id);
         
         // Clear cart from localStorage
         localStorage.removeItem('easygo-cart');
@@ -1077,7 +1138,7 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId) {
     } catch (error) {
         console.error("Payment processing error:", error);
         showAlert('error-alert');
-        document.getElementById('error-details').textContent = 'Payment successful but order update failed';
+        document.getElementById('error-details').textContent = 'Payment successful but order update failed: ' + error.message;
     }
 }
 
@@ -1106,6 +1167,13 @@ function sendWhatsAppNow() {
             whatsappSent: true,
             whatsappSentTime: new Date().toISOString(),
             updatedAt: Date.now()
+        });
+        
+        // Add to timeline
+        database.ref(`orders/${currentOrder.id}/timeline`).push({
+            status: 'whatsapp_sent',
+            message: 'WhatsApp notification sent to restaurant',
+            timestamp: Date.now()
         });
     }
     
@@ -1233,6 +1301,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup event listeners
     document.getElementById('razorpay-pay-btn').addEventListener('click', initiatePayment);
+    
+    // Check if we have existing payment data to retry
+    const retryPaymentBtn = document.getElementById('retry-payment');
+    if (retryPaymentBtn) {
+        retryPaymentBtn.addEventListener('click', function() {
+            this.classList.add('hidden');
+            initiatePayment();
+        });
+    }
+    
+    // Test mode notification (remove in production)
+    console.log("🔧 Payment Test Mode Active - Using Test Razorpay Key");
+    console.log("💰 To accept real payments, change RAZORPAY_KEY_ID to your live key");
 });
 </script>
 </body>
