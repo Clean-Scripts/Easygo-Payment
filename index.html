@@ -3,111 +3,1237 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Easy Go | Secure Payment</title>
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
-    <!-- Your existing HTML structure -->
+    <title>Easy Go | Secure Payment</title>
     
-    <script>
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCU_wJYBTwEwMZQ-iTYOjUZuEHEphA0DXc",
-            authDomain: "easygo-10f4b.firebasestorage.app",
-            projectId: "easygo-10f4b",
-            storageBucket: "easygo-10f4b.firebasestorage.app",
-            messagingSenderId: "197660067542",
-            appId: "1:197660067542:web:6c616efb479b122f1f6b77",
-            databaseURL: "https://easygo-10f4b-default-rtdb.asia-southeast1.firebasedatabase.app/"
-        };
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
         
-        let database;
-        let isFirebaseConnected = false;
+        .razorpay-payment-button { display: none !important; }
         
-        function initializeFirebase() {
-            try {
-                const app = firebase.initializeApp(firebaseConfig);
-                database = firebase.database();
-                
-                const connectedRef = database.ref(".info/connected");
-                connectedRef.on("value", function(snap) {
-                    isFirebaseConnected = snap.val() === true;
-                });
-            } catch (error) {
-                console.error("Firebase error:", error);
-            }
+        /* Status Indicator */
+        .firebase-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s;
         }
         
-        // Save order to Firebase
-        async function saveOrderToFirebase(orderData) {
-            if (!isFirebaseConnected) return null;
-            
-            try {
-                const orderRef = database.ref('orders').push();
-                await orderRef.set({
-                    ...orderData,
-                    createdAt: Date.now(),
-                    date: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-                    status: 'pending',
-                    paymentStatus: 'pending'
-                });
-                
-                return orderRef.key;
-            } catch (error) {
-                console.error("Error saving order:", error);
-                return null;
-            }
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
-        // Update payment status
-        async function updatePaymentStatus(orderId, paymentData) {
-            if (!isFirebaseConnected) return false;
-            
-            try {
-                await database.ref(`orders/${orderId}`).update({
-                    paymentStatus: paymentData.status,
-                    paymentId: paymentData.paymentId,
-                    razorpayPaymentId: paymentData.razorpayPaymentId,
-                    paymentUpdatedAt: Date.now()
-                });
-                return true;
-            } catch (error) {
-                console.error("Error updating payment:", error);
-                return false;
-            }
+        @keyframes successPulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
         
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeFirebase();
-            
-            // Update your existing payment success handler
-            function handlePaymentSuccess(paymentId) {
-                // Your existing logic
-                const orderData = {
-                    // Your order data
-                };
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        .payment-success { animation: successPulse 2s infinite; }
+        
+        /* Loading Spinner */
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Alert Overlay */
+        .alert-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(3px);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        
+        .alert-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .alert-card {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            z-index: 1001;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        
+        .alert-card.active {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        /* Notification */
+        .notification-card {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        .notification-card.show {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+
+    <!-- Firebase Status Indicator -->
+    <div id="firebaseStatus" class="firebase-status hidden">
+        🔄 Connecting...
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl text-center">
+            <div class="loading-spinner mx-auto mb-6"></div>
+            <h3 class="text-2xl font-bold mb-4">Processing Payment</h3>
+            <p class="text-gray-600">Please wait while we secure your transaction...</p>
+        </div>
+    </div>
+
+    <!-- Success Alert Card -->
+    <div id="success-alert" class="alert-card">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl border-2 border-green-200">
+            <div class="text-center">
+                <div class="text-6xl mb-6">✅</div>
+                <h3 class="text-2xl font-bold mb-4">Payment Successful!</h3>
+                <p class="text-gray-600 mb-6">Order confirmed. Please save this OTP:</p>
                 
-                // Save to Firebase
-                saveOrderToFirebase(orderData).then(firebaseOrderId => {
-                    if (firebaseOrderId) {
-                        // Update payment status
-                        updatePaymentStatus(firebaseOrderId, {
-                            status: 'success',
-                            paymentId: paymentId,
-                            razorpayPaymentId: paymentId
-                        });
+                <div class="text-4xl font-bold text-green-600 mb-6 bg-gray-100 p-4 rounded-2xl payment-success" id="generated-otp">
+                    XXX XXX
+                </div>
+                
+                <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-6">
+                    <p class="text-yellow-800 font-bold mb-2">⚠️ IMPORTANT NOTICE:</p>
+                    <p class="text-sm text-yellow-700">
+                        <strong>You MUST send the WhatsApp message</strong> to complete your order.
+                        <br>Order will NOT be delivered without WhatsApp confirmation.
+                    </p>
+                </div>
+                
+                <div class="space-y-4">
+                    <button onclick="sendWhatsAppNow()" 
+                            class="w-full py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-colors shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
+                        <span>📱 Send WhatsApp Now</span>
+                    </button>
+                    
+                    <button onclick="goToTracking()" 
+                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors">
+                        Track Your Order →
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Alert Card -->
+    <div id="error-alert" class="alert-card">
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl border-2 border-red-200">
+            <div class="text-center">
+                <div class="text-6xl mb-6">⚠️</div>
+                <h3 class="text-2xl font-bold mb-4" id="error-title">Payment Failed</h3>
+                <p class="text-gray-600 mb-6" id="error-message">Payment could not be processed.</p>
+                
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+                    <p class="text-red-800 mb-3" id="error-details"></p>
+                    <p class="text-sm text-red-700">
+                        <strong>Note:</strong> If amount was deducted, it will be refunded within 24-48 hours.
+                    </p>
+                </div>
+                
+                <div class="space-y-4">
+                    <button onclick="closeAlert('error-alert'); initiatePayment();" 
+                            class="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 transition-colors shadow-lg">
+                        Try Payment Again
+                    </button>
+                    
+                    <button onclick="closeAlert('error-alert')" 
+                            class="w-full py-3 bg-gray-200 text-gray-800 rounded-2xl hover:bg-gray-300">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Overlay -->
+    <div class="alert-overlay" id="alert-overlay" onclick="closeAllAlerts()"></div>
+
+    <!-- Notification Card -->
+    <div id="success-notification" class="notification-card">
+        <div class="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 rounded-2xl shadow-xl max-w-sm">
+            <div class="flex items-center gap-4">
+                <div class="text-3xl">✅</div>
+                <div>
+                    <h4 class="font-bold text-lg">Payment Successful!</h4>
+                    <p class="text-green-100 text-sm">Order saved to database</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-notification" class="notification-card">
+        <div class="bg-gradient-to-r from-red-500 to-pink-600 text-white p-6 rounded-2xl shadow-xl max-w-sm">
+            <div class="flex items-center gap-4">
+                <div class="text-3xl">❌</div>
+                <div>
+                    <h4 class="font-bold text-lg">Payment Failed</h4>
+                    <p class="text-red-100 text-sm" id="error-notification-msg">Please try again</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header Banner -->
+    <header class="relative mb-8">
+        <div class="h-40 overflow-hidden">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/Banner.png" 
+                 class="w-full h-full object-cover" alt="Easy Go Banner">
+        </div>
+        <div class="absolute -bottom-6 left-0 right-0 flex justify-center">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                 class="h-20 w-20 rounded-full border-4 border-white shadow-xl bg-white p-1">
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 pt-10 pb-20">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Order Summary -->
+            <div class="space-y-8">
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <span class="mr-3">📦</span>
+                        Order Summary
+                    </h2>
+                    
+                    <div id="order-items" class="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
+                        <!-- Items loaded from localStorage -->
+                    </div>
+                    
+                    <div class="border-t pt-6">
+                        <h3 class="font-bold mb-4 flex items-center">
+                            <span class="mr-2">👤</span>
+                            Customer Details
+                        </h3>
+                        <div id="customer-details" class="space-y-2">
+                            <!-- Details loaded from localStorage -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <h3 class="font-bold mb-4 flex items-center">
+                        <span class="mr-2">📍</span>
+                        Order Details
+                    </h3>
+                    <div id="delivery-address" class="space-y-2">
+                        <!-- Address loaded from localStorage -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payment Section -->
+            <div class="space-y-8">
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <span class="mr-3">💰</span>
+                        Payment Summary
+                    </h2>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-700">Food Items Total</span>
+                            <span id="food-total" class="font-semibold">₹0</span>
+                        </div>
                         
-                        // Store Firebase order ID in localStorage
-                        localStorage.setItem('easygo-firebase-order-id', firebaseOrderId);
-                    }
-                });
+                        <div class="flex justify-between py-2">
+                            <span class="text-gray-700">GST on Food (5%)</span>
+                            <span id="gst-food" class="font-semibold">₹0</span>
+                        </div>
+                        
+                        <!-- Delivery Charges Section -->
+                        <div id="delivery-section" class="border-t pt-4 mt-2">
+                            <div class="flex justify-between py-2">
+                                <span class="text-gray-700">Delivery Charge</span>
+                                <span id="delivery-charge" class="font-semibold">₹0</span>
+                            </div>
+                            <div class="flex justify-between py-2">
+                                <span class="text-gray-700">GST on Delivery</span>
+                                <span id="gst-delivery" class="font-semibold">₹0</span>
+                            </div>
+                            <p id="delivery-note" class="text-xs text-gray-500 mt-1 text-right">
+                                <span id="delivery-info"></span>
+                            </p>
+                        </div>
+                        
+                        <div class="border-t-2 border-gray-300 pt-4 mt-2">
+                            <div class="flex justify-between text-xl font-bold py-2">
+                                <span class="text-gray-800">Total Amount Payable</span>
+                                <span id="final-total" class="text-green-600">₹0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
-                // Continue with existing logic
+                <!-- Payment Options -->
+                <div class="bg-white rounded-3xl shadow-xl p-8">
+                    <div class="text-center mb-8">
+                        <div class="inline-block bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 text-green-800 px-8 py-4 rounded-2xl mb-4">
+                            <div class="text-sm font-medium mb-1">Total to pay</div>
+                            <span class="font-bold text-3xl" id="payment-amount">₹0</span>
+                        </div>
+                        <p class="text-gray-600">100% Secure Payment via Razorpay</p>
+                    </div>
+                    
+                    <div class="space-y-4 mb-8">
+                        <button id="razorpay-pay-btn" 
+                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-xl font-bold rounded-2xl hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:-translate-y-0.5 shadow-xl hover:shadow-2xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
+                                onclick="initiatePayment()">
+                            <svg class="w-7 h-7 mr-3" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M22.436 7.406H1.564a1.25 1.25 0 0 0-1.108 1.831l1.414 2.823a1.25 1.25 0 0 0 1.108.669h19.242a1.25 1.25 0 0 0 1.108-.669l1.414-2.823a1.25 1.25 0 0 0-1.108-1.831z"/>
+                                <path d="M2.5 12.406h19v9h-19z"/>
+                            </svg>
+                            Pay Now - ₹<span id="pay-amount">0</span>
+                        </button>
+                        
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
+                            <p class="text-yellow-800 text-sm font-medium">
+                                ⚠️ <strong>Important:</strong> After payment, you MUST send the WhatsApp message 
+                                to complete your order. Order will NOT be delivered without WhatsApp confirmation.
+                            </p>
+                        </div>
+                        
+                        <div class="text-center pt-4">
+                            <div class="inline-flex items-center justify-center space-x-3 text-sm text-gray-600 bg-gray-50 px-6 py-3 rounded-full">
+                                <span class="flex items-center">
+                                    <span class="text-green-500 mr-1">✓</span>
+                                    Secure
+                                </span>
+                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>Cards</span>
+                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>UPI</span>
+                                <span class="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>NetBanking</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-3">Powered by Razorpay | PCI DSS Certified</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 pt-6 border-t">
+                        <div class="flex justify-between items-center">
+                            <a href="https://clean-scripts.github.io/Easygo-Address/" 
+                               class="text-gray-600 hover:text-gray-900 flex items-center group transition-colors">
+                                <span class="text-xl mr-2 group-hover:-translate-x-1 transition-transform">←</span>
+                                <span>Back to Address</span>
+                            </a>
+                            <button id="retry-payment" 
+                                    class="text-blue-600 hover:text-blue-800 hidden flex items-center group"
+                                    onclick="initiatePayment()">
+                                <span class="mr-2 group-hover:rotate-180 transition-transform">🔄</span>
+                                <span>Retry Payment</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <div class="flex items-center">
+                        <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                             class="h-12 w-12 rounded-full bg-white p-1 mr-3">
+                        <div>
+                            <h2 class="text-xl font-bold">Easy Go</h2>
+                            <p class="text-gray-400 text-sm">Delivering Freshness & Speed !</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center md:text-right">
+                    <p class="text-gray-400 text-sm mb-2">
+                        © 2024 Easy Go | All Rights Reserved
+                    </p>
+                    <div class="mt-4">
+                        <a href="https://clean-scripts.github.io/Easygo-Menu/" class="text-gray-400 hover:text-white text-sm mr-4">View Menu</a>
+                        <a href="https://clean-scripts.github.io/Easygo-Privacy/" class="text-gray-400 hover:text-white text-sm mr-4">Privacy Policy</a>
+                        <a href="https://clean-scripts.github.io/Easygo-Terms/" class="text-gray-400 hover:text-white text-sm">Terms & Conditions</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+<!-- Firebase & Payment Logic -->
+<script>
+// ==================== FIREBASE CONFIGURATION ====================
+const firebaseConfig = {
+    apiKey: "AIzaSyCU_wJYBTwEwMZQ-iTYOjUZuEHEphA0DXc",
+    authDomain: "easygo-10f4b.firebaseapp.com",
+    databaseURL: "https://easygo-10f4b-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "easygo-10f4b",
+    storageBucket: "easygo-10f4b.firebasestorage.app",
+    messagingSenderId: "197660067542",
+    appId: "1:197660067542:web:6c616efb479b122f1f6b77"
+};
+
+// Firebase variables
+let database;
+let isFirebaseConnected = false;
+
+// Payment variables
+let orderData = {};
+let finalAmount = 0;
+let paymentProcessing = false;
+let currentOrder = null;
+let whatsappSent = false;
+
+// Razorpay Configuration
+const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
+const RESTAURANT_PHONE = "917651837322";
+
+// ==================== FIREBASE FUNCTIONS ====================
+function initializeFirebase() {
+    try {
+        const app = firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
+        
+        // Monitor connection status
+        const connectedRef = database.ref(".info/connected");
+        connectedRef.on("value", function(snap) {
+            const statusElement = document.getElementById('firebaseStatus');
+            
+            if (snap.val() === true) {
+                isFirebaseConnected = true;
+                statusElement.textContent = "✅ Connected to Database";
+                statusElement.className = "firebase-status bg-green-500 text-white";
+                console.log("Firebase connected - Ready to process payments");
+                
+                setTimeout(() => {
+                    statusElement.classList.add('hidden');
+                }, 3000);
+            } else {
+                isFirebaseConnected = false;
+                statusElement.textContent = "❌ Database Disconnected";
+                statusElement.className = "firebase-status bg-red-500 text-white";
+                statusElement.classList.remove('hidden');
             }
         });
-    </script>
+        
+        // Show initial status
+        const statusElement = document.getElementById('firebaseStatus');
+        statusElement.classList.remove('hidden');
+        statusElement.textContent = "🔄 Connecting to Database...";
+        statusElement.className = "firebase-status bg-yellow-500 text-white";
+        
+    } catch (error) {
+        console.error("Firebase initialization error:", error);
+        document.getElementById('firebaseStatus').classList.add('hidden');
+    }
+}
+
+async function saveOrderToFirebase(orderData) {
+    if (!isFirebaseConnected) {
+        console.error("Cannot save order: Firebase not connected");
+        showNotification('error', 'Database connection failed. Please try again.');
+        return null;
+    }
+    
+    try {
+        const orderId = orderData.orderId || `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        
+        // Prepare complete order data
+        const firebaseOrderData = {
+            ...orderData,
+            orderId: orderId,
+            status: 'pending',
+            paymentStatus: 'pending',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            date: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+            timeline: [{
+                status: 'created',
+                message: 'Order created and payment initiated',
+                timestamp: Date.now()
+            }]
+        };
+        
+        // Save to Firebase
+        const orderRef = database.ref(`orders/${orderId}`);
+        await orderRef.set(firebaseOrderData);
+        
+        console.log("Order saved to Firebase:", orderId);
+        showNotification('success', 'Order saved to database');
+        
+        return orderId;
+        
+    } catch (error) {
+        console.error("Error saving order to Firebase:", error);
+        showNotification('error', 'Failed to save order. Please contact support.');
+        return null;
+    }
+}
+
+async function updateOrderPaymentStatus(orderId, paymentData) {
+    if (!isFirebaseConnected) return false;
+    
+    try {
+        await database.ref(`orders/${orderId}`).update({
+            paymentStatus: paymentData.status,
+            paymentId: paymentData.paymentId,
+            razorpayPaymentId: paymentData.razorpayPaymentId,
+            updatedAt: Date.now(),
+            status: 'confirmed', // Move to confirmed after payment
+            timeline: firebase.database.ServerValue.TIMESTAMP // Add to timeline
+        });
+        
+        // Add payment confirmation to timeline
+        const timelineUpdate = {
+            status: 'payment_confirmed',
+            message: `Payment successful: ${paymentData.paymentId}`,
+            timestamp: Date.now()
+        };
+        
+        await database.ref(`orders/${orderId}/timeline`).push(timelineUpdate);
+        
+        console.log("Payment status updated for order:", orderId);
+        return true;
+        
+    } catch (error) {
+        console.error("Error updating payment status:", error);
+        return false;
+    }
+}
+
+async function getOrderFromFirebase(orderId) {
+    if (!isFirebaseConnected) return null;
+    
+    try {
+        const snapshot = await database.ref(`orders/${orderId}`).once('value');
+        return snapshot.val();
+    } catch (error) {
+        console.error("Error getting order:", error);
+        return null;
+    }
+}
+
+// ==================== UI FUNCTIONS ====================
+function showAlert(alertId) {
+    document.getElementById(alertId).classList.add('active');
+    document.getElementById('alert-overlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAlert(alertId) {
+    document.getElementById(alertId).classList.remove('active');
+    document.getElementById('alert-overlay').classList.remove('active');
+    document.body.style.overflow = 'auto';
+}
+
+function closeAllAlerts() {
+    document.querySelectorAll('.alert-card').forEach(alert => {
+        alert.classList.remove('active');
+    });
+    document.getElementById('alert-overlay').classList.remove('active');
+    document.body.style.overflow = 'auto';
+}
+
+function showNotification(type, message = '') {
+    const notificationId = type === 'success' ? 'success-notification' : 'error-notification';
+    const notification = document.getElementById(notificationId);
+    
+    if (message && type === 'error') {
+        document.getElementById('error-notification-msg').textContent = message.substring(0, 50);
+    }
+    
+    notification.classList.add('show');
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
+}
+
+function showLoading() {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+// ==================== ORDER DATA LOADING ====================
+function loadOrderData() {
+    try {
+        // Load from localStorage (from previous pages)
+        const cart = JSON.parse(localStorage.getItem('easygo-cart') || '[]');
+        const address = JSON.parse(localStorage.getItem('easygo-address') || '{}');
+        const delivery = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
+        
+        if (cart.length === 0) {
+            showAlert('error-alert');
+            document.getElementById('error-title').textContent = 'Empty Cart';
+            document.getElementById('error-message').textContent = 'Your cart is empty. Please add items first.';
+            document.getElementById('razorpay-pay-btn').disabled = true;
+            return false;
+        }
+        
+        // Get delivery mode
+        const deliveryMode = address.deliveryMode || 'takeaway';
+        
+        // Calculate food total
+        let foodTotal = 0;
+        cart.forEach(item => {
+            const unitPrice = parseFloat(item.unitPrice) || parseFloat(item.price) || 0;
+            const quantity = parseInt(item.quantity) || 1;
+            const itemTotal = unitPrice * quantity;
+            foodTotal += itemTotal || 0;
+        });
+        
+        if (foodTotal <= 0) {
+            foodTotal = parseFloat(localStorage.getItem('easygo-cart-items-total')) || 0;
+        }
+        
+        if (foodTotal <= 0) {
+            showNotification('error', 'Invalid order amount');
+            return false;
+        }
+        
+        const gstFood = Math.round((foodTotal * 0.05) * 100) / 100;
+        
+        // Delivery charges calculation
+        let deliveryCharge = 0;
+        let gstDelivery = 0;
+        let deliveryInfo = "";
+        
+        if (deliveryMode === 'delivery') {
+            const distance = parseFloat(delivery.distance) || 0;
+            const cartTotal = foodTotal;
+            
+            // Delivery logic from address page
+            if (distance <= 1) {
+                deliveryCharge = 9;
+                deliveryInfo = "Fixed ₹9 delivery (GST included)";
+                gstDelivery = 0;
+            } else if (distance <= 4 && cartTotal > 199) {
+                deliveryCharge = 0;
+                deliveryInfo = "Free delivery (order above ₹199)";
+                gstDelivery = 0;
+            } else {
+                deliveryCharge = Math.min(20 + (distance * 10), 80);
+                gstDelivery = Math.round((deliveryCharge * 0.18) * 100) / 100;
+                deliveryInfo = `${distance.toFixed(1)}km delivery`;
+            }
+        }
+        
+        finalAmount = parseFloat((foodTotal + gstFood + deliveryCharge + gstDelivery).toFixed(2));
+        
+        if (finalAmount < 1) {
+            showNotification('error', 'Invalid total amount');
+            return false;
+        }
+        
+        // Store order data
+        orderData = { 
+            cart, 
+            address, 
+            delivery, 
+            amount: finalAmount,
+            totals: {
+                foodTotal,
+                gstFood,
+                deliveryCharge,
+                gstDelivery,
+                deliveryMode,
+                distance: delivery.distance
+            }
+        };
+        
+        // Update UI
+        displayCartItems(cart);
+        displayCustomerDetails(address, deliveryMode);
+        displayDeliveryAddress(address, delivery, deliveryMode);
+        updatePaymentUI(foodTotal, gstFood, deliveryCharge, gstDelivery, deliveryMode, deliveryInfo);
+        
+        console.log("Order loaded successfully");
+        return true;
+        
+    } catch (error) {
+        console.error("Error loading order:", error);
+        showNotification('error', 'Failed to load order data');
+        return false;
+    }
+}
+
+function updatePaymentUI(foodTotal, gstFood, deliveryCharge, gstDelivery, deliveryMode, deliveryInfo) {
+    document.getElementById('food-total').textContent = `₹${foodTotal.toFixed(2)}`;
+    document.getElementById('gst-food').textContent = `₹${gstFood.toFixed(2)}`;
+    
+    if (deliveryMode === 'delivery') {
+        document.getElementById('delivery-section').classList.remove('hidden');
+        document.getElementById('delivery-charge').textContent = `₹${deliveryCharge.toFixed(2)}`;
+        
+        if (deliveryCharge === 9) {
+            document.getElementById('gst-delivery').textContent = '₹0.00 (Included in ₹9)';
+        } else {
+            document.getElementById('gst-delivery').textContent = `₹${gstDelivery.toFixed(2)}`;
+        }
+        
+        document.getElementById('delivery-info').textContent = deliveryInfo;
+    } else {
+        document.getElementById('delivery-section').classList.add('hidden');
+    }
+    
+    document.getElementById('final-total').textContent = `₹${finalAmount.toFixed(2)}`;
+    document.getElementById('payment-amount').textContent = `₹${finalAmount.toFixed(2)}`;
+    document.getElementById('pay-amount').textContent = finalAmount.toFixed(2);
+}
+
+function displayCartItems(cart) {
+    const orderItems = document.getElementById('order-items');
+    if (!orderItems) return;
+    
+    orderItems.innerHTML = '';
+    
+    cart.forEach(item => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100 fade-in';
+        
+        const quantity = parseInt(item.quantity) || 1;
+        const unitPrice = parseFloat(item.unitPrice) || parseFloat(item.price) || 0;
+        const totalPrice = unitPrice * quantity;
+        
+        itemDiv.innerHTML = `
+            <div class="flex-1">
+                <p class="font-semibold text-gray-800 text-lg">${item.name || 'Food Item'}</p>
+                <div class="flex items-center gap-4 mt-2">
+                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">Qty: ${quantity}</span>
+                    <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">Pack: ${item.pack || 'Family'}</span>
+                </div>
+                <p class="text-sm text-gray-600 mt-2">₹${unitPrice.toFixed(2)} × ${quantity}</p>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-gray-500 mb-1">Price</div>
+                <div class="text-lg font-bold text-gray-800">₹${totalPrice.toFixed(2)}</div>
+            </div>
+        `;
+        orderItems.appendChild(itemDiv);
+    });
+}
+
+function displayCustomerDetails(address, deliveryMode) {
+    const customerDetails = document.getElementById('customer-details');
+    if (!customerDetails) return;
+    
+    let detailsHTML = `
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    `;
+    
+    if (address.name) {
+        detailsHTML += `
+            <div class="flex items-start">
+                <span class="text-blue-600 mr-2 text-xl">👤</span>
+                <div>
+                    <div class="text-sm text-blue-500">Name</div>
+                    <div class="font-semibold text-gray-800">${address.name}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (address.phone) {
+        detailsHTML += `
+            <div class="flex items-start">
+                <span class="text-blue-600 mr-2 text-xl">📱</span>
+                <div>
+                    <div class="text-sm text-blue-500">Phone</div>
+                    <div class="font-semibold text-gray-800">${address.phone}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    const modeText = deliveryMode === 'delivery' ? 'Home Delivery' : 'Takeaway';
+    const modeIcon = deliveryMode === 'delivery' ? '🛵' : '🏪';
+    detailsHTML += `
+        <div class="flex items-start md:col-span-2">
+            <span class="text-blue-600 mr-2 text-xl">${modeIcon}</span>
+            <div>
+                <div class="text-sm text-blue-500">Order Type</div>
+                <div class="font-semibold text-gray-800">${modeText}</div>
+            </div>
+        </div>
+    `;
+    
+    detailsHTML += `
+            </div>
+        </div>
+    `;
+    
+    customerDetails.innerHTML = detailsHTML;
+}
+
+function displayDeliveryAddress(address, delivery, deliveryMode) {
+    const deliveryAddress = document.getElementById('delivery-address');
+    if (!deliveryAddress) return;
+    
+    if (deliveryMode === 'delivery') {
+        let addressHTML = `
+            <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+                <div class="flex items-center mb-3">
+                    <span class="text-green-600 mr-2 text-xl">📍</span>
+                    <span class="font-semibold text-gray-800">Delivery Address</span>
+                </div>
+        `;
+        
+        if (address.houseNumber || address.locality) {
+            const addressLine1 = `${address.houseNumber || ''}${address.houseNumber && address.locality ? ', ' : ''}${address.locality || ''}`;
+            const addressLine2 = address.street ? address.street : '';
+            const cityLine = `${address.city || 'Indore'}, ${address.state || 'MP'} - ${address.pincode || ''}`;
+            
+            if (addressLine1.trim()) {
+                addressHTML += `<div class="mb-2">
+                    <div class="text-sm text-gray-600 mb-1">Address</div>
+                    <div class="font-medium text-gray-800">${addressLine1}</div>
+                </div>`;
+            }
+            
+            if (addressLine2) {
+                addressHTML += `<div class="mb-2">
+                    <div class="text-sm text-gray-600 mb-1">Street/Landmark</div>
+                    <div class="font-medium text-gray-800">${addressLine2}</div>
+                </div>`;
+            }
+            
+            addressHTML += `<div class="mb-2">
+                <div class="text-sm text-gray-600 mb-1">City & Pincode</div>
+                <div class="font-medium text-gray-800">${cityLine}</div>
+            </div>`;
+            
+            if (address.addressType) {
+                addressHTML += `<div class="mb-2">
+                    <div class="text-sm text-gray-600 mb-1">Address Type</div>
+                    <div class="font-medium text-gray-800">${address.addressType}</div>
+                </div>`;
+            }
+            
+            if (delivery.distance) {
+                addressHTML += `<div class="mb-2">
+                    <div class="text-sm text-gray-600 mb-1">Distance</div>
+                    <div class="font-medium text-gray-800">${delivery.distance} km from restaurant</div>
+                </div>`;
+            }
+        }
+        
+        addressHTML += `</div>`;
+        deliveryAddress.innerHTML = addressHTML;
+        
+    } else {
+        deliveryAddress.innerHTML = `
+            <div class="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                <div class="flex items-center mb-3">
+                    <span class="text-purple-600 mr-2 text-xl">🏪</span>
+                    <span class="font-semibold text-gray-800">Pickup Details</span>
+                </div>
+                
+                <div class="space-y-3">
+                    <div>
+                        <div class="text-sm text-gray-600 mb-1">Pickup Location</div>
+                        <div class="font-medium text-gray-800">Prime Square, Omaxe City 1, Indore</div>
+                    </div>
+                    
+                    <div>
+                        <div class="text-sm text-gray-600 mb-1">Pickup Timings</div>
+                        <div class="font-medium text-gray-800">5:45 PM - 11:30 PM</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// ==================== RAZORPAY PAYMENT ====================
+async function initiatePayment() {
+    if (paymentProcessing) {
+        showNotification('error', 'Payment already in progress');
+        return;
+    }
+    
+    if (!orderData.address?.phone) {
+        showNotification('error', 'Phone number required');
+        return;
+    }
+    
+    if (finalAmount < 1) {
+        showNotification('error', 'Invalid payment amount');
+        return;
+    }
+    
+    paymentProcessing = true;
+    showLoading();
+    
+    try {
+        // First save order to Firebase (with pending status)
+        const firebaseOrderId = await saveOrderToFirebase({
+            customerPhone: orderData.address.phone,
+            customerName: orderData.address.name,
+            items: orderData.cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                pack: item.pack,
+                unitPrice: parseFloat(item.unitPrice) || parseFloat(item.price) || 0,
+                total: (parseFloat(item.unitPrice) || parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)
+            })),
+            deliveryMode: orderData.totals.deliveryMode,
+            address: orderData.totals.deliveryMode === 'delivery' ? 
+                `${orderData.address.houseNumber || ''}, ${orderData.address.locality || ''}, ${orderData.address.city || 'Indore'}` : 
+                "Takeaway - Prime Square",
+            totalAmount: finalAmount,
+            totals: orderData.totals
+        });
+        
+        if (!firebaseOrderId) {
+            throw new Error('Failed to save order to database');
+        }
+        
+        // Store Firebase order ID
+        localStorage.setItem('easygo-firebase-order-id', firebaseOrderId);
+        
+        // Create Razorpay order
+        const options = {
+            key: RAZORPAY_KEY_ID,
+            amount: Math.round(finalAmount * 100),
+            currency: "INR",
+            name: "Easy Go",
+            description: `Order Payment - ${orderData.address.name}`,
+            prefill: {
+                name: orderData.address.name || "Customer",
+                contact: orderData.address.phone || "",
+                email: "customer@easygo.com"
+            },
+            handler: async function(response) {
+                await handlePaymentSuccess(response.razorpay_payment_id, firebaseOrderId);
+            },
+            theme: { 
+                color: "#10B981"
+            },
+            modal: {
+                ondismiss: function() {
+                    paymentProcessing = false;
+                    hideLoading();
+                    document.getElementById('retry-payment').classList.remove('hidden');
+                }
+            }
+        };
+        
+        const rzp = new Razorpay(options);
+        
+        rzp.on('payment.failed', async function(response) {
+            paymentProcessing = false;
+            hideLoading();
+            
+            // Update Firebase with failed status
+            if (firebaseOrderId) {
+                await database.ref(`orders/${firebaseOrderId}`).update({
+                    paymentStatus: 'failed',
+                    paymentError: response.error.description,
+                    updatedAt: Date.now()
+                });
+            }
+            
+            showAlert('error-alert');
+            document.getElementById('error-details').textContent = response.error.description || 'Payment failed';
+            document.getElementById('retry-payment').classList.remove('hidden');
+        });
+        
+        rzp.open();
+        
+    } catch (error) {
+        console.error("Payment initiation error:", error);
+        paymentProcessing = false;
+        hideLoading();
+        showAlert('error-alert');
+        document.getElementById('error-details').textContent = 'Unable to connect to payment gateway';
+    }
+}
+
+async function handlePaymentSuccess(paymentId, firebaseOrderId) {
+    paymentProcessing = false;
+    hideLoading();
+    
+    if (!paymentId || !firebaseOrderId) {
+        showAlert('error-alert');
+        document.getElementById('error-details').textContent = 'No payment ID received';
+        return;
+    }
+    
+    try {
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Update Firebase with successful payment
+        const paymentUpdated = await updateOrderPaymentStatus(firebaseOrderId, {
+            status: 'success',
+            paymentId: paymentId,
+            razorpayPaymentId: paymentId
+        });
+        
+        if (!paymentUpdated) {
+            throw new Error('Failed to update payment status in database');
+        }
+        
+        // Update order with confirmed status and OTP
+        await database.ref(`orders/${firebaseOrderId}`).update({
+            status: 'confirmed',
+            otp: otp,
+            updatedAt: Date.now()
+        });
+        
+        // Create complete order object for local storage
+        currentOrder = {
+            id: firebaseOrderId,
+            paymentId: paymentId,
+            otp: otp,
+            amount: finalAmount,
+            customer: orderData.address.name,
+            phone: orderData.address.phone,
+            items: orderData.cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                pack: item.pack,
+                unitPrice: parseFloat(item.unitPrice) || parseFloat(item.price) || 0,
+                total: (parseFloat(item.unitPrice) || parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)
+            })),
+            deliveryMode: orderData.totals.deliveryMode,
+            totals: orderData.totals,
+            address: orderData.address,
+            delivery: orderData.delivery,
+            timestamp: new Date().toISOString(),
+            paymentMethod: "razorpay",
+            status: "pending_whatsapp"
+        };
+        
+        // Save to localStorage for backup and track page
+        localStorage.setItem('easygo-otp', otp);
+        localStorage.setItem('easygo-order-id', firebaseOrderId);
+        localStorage.setItem('easygo-last-order', JSON.stringify(currentOrder));
+        localStorage.setItem('easygo-last-payment-id', paymentId);
+        
+        // Clear cart from localStorage
+        localStorage.removeItem('easygo-cart');
+        localStorage.removeItem('easygo-cart-items-total');
+        
+        // Update UI
+        document.getElementById('generated-otp').textContent = otp;
+        showAlert('success-alert');
+        showNotification('success');
+        
+        // Auto-send WhatsApp after 1 second
+        setTimeout(() => {
+            sendWhatsAppNow();
+        }, 1000);
+        
+    } catch (error) {
+        console.error("Payment processing error:", error);
+        showAlert('error-alert');
+        document.getElementById('error-details').textContent = 'Payment successful but order update failed';
+    }
+}
+
+// ==================== WHATSAPP FUNCTIONS ====================
+function sendWhatsAppNow() {
+    if (!currentOrder) {
+        showNotification('error', 'No order found');
+        return false;
+    }
+    
+    // Create WhatsApp message
+    let message = createWhatsAppMessage(currentOrder);
+    
+    // Create WhatsApp URL
+    const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${encodeURIComponent(message)}`;
+    
+    // Open WhatsApp
+    window.open(whatsappURL, '_blank', 'noopener,noreferrer');
+    
+    // Mark WhatsApp as sent and update Firebase
+    whatsappSent = true;
+    
+    if (isFirebaseConnected && currentOrder.id) {
+        database.ref(`orders/${currentOrder.id}`).update({
+            status: "confirmed",
+            whatsappSent: true,
+            whatsappSentTime: new Date().toISOString(),
+            updatedAt: Date.now()
+        });
+    }
+    
+    showNotification('success', 'WhatsApp sent successfully');
+    return true;
+}
+
+function createWhatsAppMessage(order) {
+    let message = "";
+    
+    // Header with emojis
+    message += "📦 *NEW ORDER RECEIVED* 📦\n\n";
+    
+    // Order Details
+    message += `*Order ID:* ${order.id}\n`;
+    message += `*OTP:* ${order.otp}\n`;
+    message += `*Amount:* ₹${order.amount.toFixed(2)}\n`;
+    message += `*Payment ID:* ${order.paymentId}\n`;
+    message += `*Status:* CONFIRMED ✅\n\n`;
+    
+    // Items Ordered
+    message += `*ITEMS ORDERED:*\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n`;
+    order.items.forEach(item => {
+        const quantity = parseInt(item.quantity) || 1;
+        const unitPrice = parseFloat(item.unitPrice) || 0;
+        const totalPrice = parseFloat(item.total) || (unitPrice * quantity);
+        
+        message += `• ${item.name} × ${quantity}\n`;
+        message += `  Pack: ${item.pack || 'Standard'}\n`;
+        message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}\n\n`;
+    });
+    
+    // Payment Breakdown
+    message += `*PAYMENT BREAKDOWN:*\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n`;
+    message += `Food Total: ₹${order.totals.foodTotal.toFixed(2)}\n`;
+    message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}\n`;
+    
+    if (order.deliveryMode === 'delivery') {
+        message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}\n`;
+        if (order.totals.deliveryCharge === 9) {
+            message += `GST on Delivery: Included in ₹9\n`;
+        } else {
+            message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}\n`;
+        }
+    }
+    
+    message += `*TOTAL: ₹${order.amount.toFixed(2)}*\n\n`;
+    
+    // Customer Details
+    message += `*CUSTOMER DETAILS:*\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n`;
+    message += `👤 Name: ${order.customer}\n`;
+    message += `📱 Phone: ${order.phone}\n`;
+    message += `💳 Payment: Razorpay (Online)\n\n`;
+    
+    // Delivery/Pickup Details
+    if (order.deliveryMode === 'delivery') {
+        message += `*📍 DELIVERY ADDRESS:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        
+        // Build address
+        const addressParts = [];
+        if (order.address.houseNumber) addressParts.push(order.address.houseNumber);
+        if (order.address.floorNumber) addressParts.push(`Floor ${order.address.floorNumber}`);
+        if (order.address.street) addressParts.push(order.address.street);
+        if (order.address.locality) addressParts.push(order.address.locality);
+        if (order.address.city) addressParts.push(order.address.city);
+        if (order.address.state) addressParts.push(order.address.state);
+        if (order.address.pincode) addressParts.push(order.address.pincode);
+        
+        message += addressParts.join(', ') + '\n';
+        
+        if (order.delivery?.distance) {
+            message += `Distance: ${order.delivery.distance} km\n`;
+        }
+    } else {
+        message += `*🏪 PICKUP DETAILS:*\n`;
+        message += `Prime Square, Omaxe City 1, Indore\n`;
+        message += `Timings: 5:45 PM - 11:30 PM\n`;
+        message += `Customer: ${order.customer}\n`;
+        message += `Phone: ${order.phone}\n`;
+        message += `📋 OTP verification required at pickup\n`;
+    }
+    
+    // Order Time
+    message += `\n*📅 ORDER TIME:*\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n`;
+    message += `⏰ ${new Date().toLocaleTimeString()}\n`;
+    message += `📅 ${new Date().toLocaleDateString()}\n\n`;
+    
+    // Important Notice
+    message += `⚠️ *IMPORTANT:* Customer has been instructed to send this message.\n`;
+    message += `Order will not be delivered without WhatsApp confirmation.\n\n`;
+    
+    message += `_Order placed via EasyGo Payment System_`;
+    
+    return message;
+}
+
+function goToTracking() {
+    if (!whatsappSent) {
+        const confirmGo = confirm("⚠️ You haven't sent the WhatsApp message!\n\nYour order will NOT be delivered without WhatsApp confirmation.\n\nAre you sure you want to continue?");
+        if (!confirmGo) {
+            sendWhatsAppNow();
+            return;
+        }
+    }
+    
+    // Store that we just completed payment
+    sessionStorage.setItem('just_paid', 'true');
+    window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
+}
+
+// ==================== INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Firebase
+    initializeFirebase();
+    
+    // Load order data
+    if (!loadOrderData()) {
+        document.getElementById('razorpay-pay-btn').disabled = true;
+    }
+    
+    // Setup event listeners
+    document.getElementById('razorpay-pay-btn').addEventListener('click', initiatePayment);
+});
+</script>
 </body>
 </html>
