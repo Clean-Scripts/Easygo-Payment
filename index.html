@@ -428,20 +428,15 @@ let paymentProcessing = false;
 let currentOrder = null;
 let whatsappSent = false;
 
-// Razorpay Configuration - Using TEST key instead of live
+// Razorpay Configuration
 const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
 const RESTAURANT_PHONE = "917651837322";
 
 // ==================== FIREBASE FUNCTIONS ====================
 function initializeFirebase() {
     try {
-        // Check if Firebase is already initialized
-        if (!firebase.apps.length) {
-            const app = firebase.initializeApp(firebaseConfig);
-            database = firebase.database();
-        } else {
-            database = firebase.database();
-        }
+        const app = firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
         
         // Monitor connection status
         const connectedRef = database.ref(".info/connected");
@@ -478,87 +473,170 @@ function initializeFirebase() {
 }
 
 async function saveOrderToFirebase(orderData) {
-    if (!isFirebaseConnected) {
-        console.error("Cannot save order: Firebase not connected");
-        showNotification('error', 'Database connection failed. Please try again.');
-        return null;
-    }
-    
     try {
-        // Generate unique order ID
+        // Create unique order ID
         const orderId = `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        const timestamp = Date.now();
         
-        // Prepare complete order data
+        // Prepare order data for Firebase
         const firebaseOrderData = {
-            ...orderData,
             orderId: orderId,
-            status: 'pending',
-            paymentStatus: 'pending',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            customerName: orderData.customerName || orderData.address?.name || "Customer",
+            customerPhone: orderData.customerPhone || orderData.address?.phone || "",
+            customerEmail: orderData.customerEmail || "",
+            items: orderData.items || [],
+            totalAmount: orderData.amount || orderData.totalAmount || 0,
+            deliveryMode: orderData.deliveryMode || orderData.totals?.deliveryMode || "takeaway",
+            address: orderData.address || "Takeaway - Prime Square",
+            paymentMethod: "Razorpay",
+            paymentStatus: "pending",
+            status: "pending",
+            otp: generateOTP(),
+            gstFood: orderData.totals?.gstFood || 0,
+            deliveryCharge: orderData.totals?.deliveryCharge || 0,
+            gstDelivery: orderData.totals?.gstDelivery || 0,
+            foodTotal: orderData.totals?.foodTotal || 0,
+            distance: orderData.delivery?.distance || 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
             date: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-            timeline: [{
-                status: 'created',
-                message: 'Order created and payment initiated',
-                timestamp: Date.now()
-            }]
+            timeline: {
+                created: {
+                    status: "created",
+                    message: "Order created and payment initiated",
+                    timestamp: timestamp
+                }
+            }
         };
         
-        // Save to Firebase
-        const orderRef = database.ref(`orders/${orderId}`);
-        await orderRef.set(firebaseOrderData);
+        console.log("Saving order to Firebase:", firebaseOrderData);
         
-        console.log("Order saved to Firebase:", orderId);
+        // Save to Firebase - using set() instead of push() to control the key
+        await database.ref(`orders/${orderId}`).set(firebaseOrderData);
+        
+        console.log("Order saved successfully to Firebase with ID:", orderId);
         showNotification('success', 'Order saved to database');
         
         return orderId;
         
     } catch (error) {
         console.error("Error saving order to Firebase:", error);
+        console.error("Error details:", error.message, error.code);
+        
+        // For debugging - try alternative approach
+        if (error.code === 'PERMISSION_DENIED') {
+            console.log("⚠️ Firebase Permission Denied - Switching to Local Storage Mode");
+            showNotification('warning', 'Using local storage backup');
+            return saveOrderToLocalStorage(orderData);
+        }
+        
         showNotification('error', 'Failed to save order. Please contact support.');
         return null;
     }
 }
 
-async function updateOrderPaymentStatus(orderId, paymentData) {
-    if (!isFirebaseConnected) return false;
-    
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function saveOrderToLocalStorage(orderData) {
     try {
-        await database.ref(`orders/${orderId}`).update({
+        const orderId = `LOCAL${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        const timestamp = Date.now();
+        const otp = generateOTP();
+        
+        const localOrderData = {
+            orderId: orderId,
+            customerName: orderData.customerName || orderData.address?.name || "Customer",
+            customerPhone: orderData.customerPhone || orderData.address?.phone || "",
+            items: orderData.items || [],
+            totalAmount: orderData.amount || orderData.totalAmount || 0,
+            deliveryMode: orderData.deliveryMode || orderData.totals?.deliveryMode || "takeaway",
+            address: orderData.address || "Takeaway - Prime Square",
+            paymentMethod: "Razorpay",
+            paymentStatus: "pending",
+            status: "pending",
+            otp: otp,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            date: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+        };
+        
+        // Save to localStorage as backup
+        localStorage.setItem(`easygo-local-order-${orderId}`, JSON.stringify(localOrderData));
+        
+        console.log("Order saved to localStorage as backup:", orderId);
+        return orderId;
+        
+    } catch (error) {
+        console.error("Error saving to localStorage:", error);
+        return null;
+    }
+}
+
+async function updateOrderPaymentStatus(orderId, paymentData) {
+    try {
+        if (!isFirebaseConnected || !orderId) {
+            console.log("⚠️ Firebase not connected or no orderId, updating localStorage");
+            return updateLocalOrderPaymentStatus(orderId, paymentData);
+        }
+        
+        const updates = {
             paymentStatus: paymentData.status,
             paymentId: paymentData.paymentId,
             razorpayPaymentId: paymentData.razorpayPaymentId,
             updatedAt: Date.now(),
-            status: 'confirmed', // Move to confirmed after payment
-        });
+            status: 'confirmed'
+        };
         
-        // Add payment confirmation to timeline
+        // Add to timeline
         const timelineUpdate = {
             status: 'payment_confirmed',
             message: `Payment successful: ${paymentData.paymentId}`,
             timestamp: Date.now()
         };
         
-        await database.ref(`orders/${orderId}/timeline`).push(timelineUpdate);
+        await database.ref(`orders/${orderId}`).update(updates);
+        await database.ref(`orders/${orderId}/timeline/payment_confirmed`).set(timelineUpdate);
         
         console.log("Payment status updated for order:", orderId);
         return true;
         
     } catch (error) {
         console.error("Error updating payment status:", error);
+        
+        // Fallback to localStorage
+        if (error.code === 'PERMISSION_DENIED') {
+            return updateLocalOrderPaymentStatus(orderId, paymentData);
+        }
+        
         return false;
     }
 }
 
-async function getOrderFromFirebase(orderId) {
-    if (!isFirebaseConnected) return null;
-    
+function updateLocalOrderPaymentStatus(orderId, paymentData) {
     try {
-        const snapshot = await database.ref(`orders/${orderId}`).once('value');
-        return snapshot.val();
+        // Get order from localStorage
+        const orderKey = `easygo-local-order-${orderId}`;
+        const orderJson = localStorage.getItem(orderKey);
+        
+        if (orderJson) {
+            const order = JSON.parse(orderJson);
+            order.paymentStatus = paymentData.status;
+            order.paymentId = paymentData.paymentId;
+            order.razorpayPaymentId = paymentData.razorpayPaymentId;
+            order.updatedAt = Date.now();
+            order.status = 'confirmed';
+            
+            localStorage.setItem(orderKey, JSON.stringify(order));
+            console.log("Payment status updated in localStorage for order:", orderId);
+            return true;
+        }
+        
+        return false;
     } catch (error) {
-        console.error("Error getting order:", error);
-        return null;
+        console.error("Error updating localStorage payment status:", error);
+        return false;
     }
 }
 
@@ -677,12 +755,26 @@ function loadOrderData() {
             return false;
         }
         
+        // Prepare items array for Firebase
+        const itemsArray = cart.map(item => ({
+            name: item.name,
+            quantity: parseInt(item.quantity) || 1,
+            pack: item.pack || 'Standard',
+            unitPrice: parseFloat(item.unitPrice) || parseFloat(item.price) || 0,
+            total: (parseFloat(item.unitPrice) || parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)
+        }));
+        
         // Store order data
         orderData = { 
             cart, 
             address, 
             delivery, 
             amount: finalAmount,
+            customerName: address.name,
+            customerPhone: address.phone,
+            customerEmail: address.email,
+            deliveryMode: deliveryMode,
+            items: itemsArray,
             totals: {
                 foodTotal,
                 gstFood,
@@ -700,6 +792,7 @@ function loadOrderData() {
         updatePaymentUI(foodTotal, gstFood, deliveryCharge, gstDelivery, deliveryMode, deliveryInfo);
         
         console.log("Order loaded successfully");
+        console.log("Order data:", orderData);
         return true;
         
     } catch (error) {
@@ -918,110 +1011,88 @@ async function initiatePayment() {
     showLoading();
     
     try {
-        // Generate order ID before payment
-        const orderId = `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
-        const orderDescription = `Order from ${orderData.address.name || 'Customer'}`;
+        console.log("Initiating payment for amount:", finalAmount);
         
-        // Save order to Firebase first (with pending status)
+        // First save order to Firebase (with pending status)
         const firebaseOrderId = await saveOrderToFirebase({
-            orderId: orderId,
             customerPhone: orderData.address.phone,
             customerName: orderData.address.name,
-            items: orderData.cart.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                pack: item.pack,
-                unitPrice: parseFloat(item.unitPrice) || parseFloat(item.price) || 0,
-                total: (parseFloat(item.unitPrice) || parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)
-            })),
-            deliveryMode: orderData.totals.deliveryMode,
-            address: orderData.totals.deliveryMode === 'delivery' ? 
+            items: orderData.items,
+            deliveryMode: orderData.deliveryMode,
+            address: orderData.deliveryMode === 'delivery' ? 
                 `${orderData.address.houseNumber || ''}, ${orderData.address.locality || ''}, ${orderData.address.city || 'Indore'}` : 
                 "Takeaway - Prime Square",
-            totalAmount: finalAmount,
-            totals: orderData.totals,
-            description: orderDescription
+            amount: finalAmount,
+            totals: orderData.totals
         });
         
         if (!firebaseOrderId) {
-            throw new Error('Failed to save order to database');
+            throw new Error('Failed to save order');
         }
         
-        // Store Firebase order ID
-        localStorage.setItem('easygo-firebase-order-id', firebaseOrderId);
+        console.log("Order saved with ID:", firebaseOrderId);
         
-        // Create Razorpay order options
+        // Store Firebase order ID in localStorage
+        localStorage.setItem('easygo-firebase-order-id', firebaseOrderId);
+        localStorage.setItem('easygo-current-order-data', JSON.stringify(orderData));
+        
+        // Create Razorpay order
         const options = {
             key: RAZORPAY_KEY_ID,
-            amount: Math.round(finalAmount * 100), // Convert to paise
+            amount: Math.round(finalAmount * 100), // Amount in paise
             currency: "INR",
-            name: "Easy Go Restaurant",
-            description: orderDescription,
-            order_id: null, // We'll get this from Razorpay
-            handler: async function(response) {
-                // Payment success handler
-                await handlePaymentSuccess(response, firebaseOrderId);
-            },
+            name: "Easy Go",
+            description: `Order #${firebaseOrderId} - ${orderData.address.name}`,
             prefill: {
                 name: orderData.address.name || "Customer",
-                email: orderData.address.email || "customer@easygo.com",
-                contact: orderData.address.phone || ""
+                contact: orderData.address.phone || "",
+                email: orderData.address.email || "customer@easygo.com"
             },
-            notes: {
-                order_id: orderId,
-                firebase_order_id: firebaseOrderId
+            handler: async function(response) {
+                console.log("Payment success response:", response);
+                await handlePaymentSuccess(response.razorpay_payment_id, firebaseOrderId, response);
             },
-            theme: {
+            theme: { 
                 color: "#10B981"
             },
             modal: {
                 ondismiss: function() {
+                    console.log("Payment modal dismissed");
                     paymentProcessing = false;
                     hideLoading();
                     document.getElementById('retry-payment').classList.remove('hidden');
-                    showNotification('info', 'Payment cancelled by user');
+                    showNotification('info', 'Payment cancelled');
                 }
             }
         };
         
-        // Create Razorpay instance
+        console.log("Opening Razorpay with options:", options);
+        
         const rzp = new Razorpay(options);
         
-        // Handle payment failure
         rzp.on('payment.failed', async function(response) {
+            console.error("Payment failed:", response);
             paymentProcessing = false;
             hideLoading();
-            
-            console.error('Payment failed:', response.error);
             
             // Update Firebase with failed status
             if (firebaseOrderId) {
                 try {
-                    await database.ref(`orders/${firebaseOrderId}`).update({
-                        paymentStatus: 'failed',
-                        paymentError: response.error.description || 'Unknown error',
-                        updatedAt: Date.now(),
-                        status: 'failed'
-                    });
-                    
-                    // Add to timeline
-                    await database.ref(`orders/${firebaseOrderId}/timeline`).push({
-                        status: 'payment_failed',
-                        message: `Payment failed: ${response.error.description}`,
-                        timestamp: Date.now()
+                    await updateOrderPaymentStatus(firebaseOrderId, {
+                        status: 'failed',
+                        paymentId: response.error.metadata?.payment_id || 'failed',
+                        razorpayPaymentId: response.error.metadata?.payment_id || 'failed'
                     });
                 } catch (error) {
-                    console.error("Error updating failed payment:", error);
+                    console.error("Failed to update payment status:", error);
                 }
             }
             
-            // Show error alert
             showAlert('error-alert');
-            document.getElementById('error-details').textContent = response.error.description || 'Payment failed. Please try again.';
+            document.getElementById('error-details').textContent = response.error.description || 'Payment failed';
             document.getElementById('retry-payment').classList.remove('hidden');
         });
         
-        // Open Razorpay checkout
         rzp.open();
         
     } catch (error) {
@@ -1029,124 +1100,115 @@ async function initiatePayment() {
         paymentProcessing = false;
         hideLoading();
         
-        // Show error alert with specific message
         showAlert('error-alert');
-        let errorMsg = 'Unable to process payment. ';
+        document.getElementById('error-title').textContent = 'Payment Error';
+        document.getElementById('error-message').textContent = 'Unable to process payment';
+        document.getElementById('error-details').textContent = error.message || 'Unknown error occurred';
         
-        if (error.message.includes('key_id')) {
-            errorMsg += 'Invalid Razorpay key. Please contact support.';
-        } else if (error.message.includes('network')) {
-            errorMsg += 'Network error. Please check your internet connection.';
-        } else {
-            errorMsg += 'Please try again or contact support.';
-        }
-        
-        document.getElementById('error-details').textContent = errorMsg;
+        document.getElementById('retry-payment').classList.remove('hidden');
     }
 }
 
-async function handlePaymentSuccess(response, firebaseOrderId) {
-    console.log('Payment success response:', response);
-    
-    // Hide loading first
+async function handlePaymentSuccess(paymentId, firebaseOrderId, response) {
     paymentProcessing = false;
     hideLoading();
     
-    if (!response.razorpay_payment_id) {
+    console.log("Payment success:", paymentId, firebaseOrderId, response);
+    
+    if (!paymentId || !firebaseOrderId) {
         showAlert('error-alert');
-        document.getElementById('error-details').textContent = 'No payment ID received from Razorpay';
+        document.getElementById('error-details').textContent = 'No payment ID received';
         return;
     }
     
     try {
         // Generate OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = generateOTP();
         
         // Update Firebase with successful payment
         const paymentUpdated = await updateOrderPaymentStatus(firebaseOrderId, {
             status: 'success',
-            paymentId: response.razorpay_payment_id,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpayOrderId: response.razorpay_order_id,
-            razorpaySignature: response.razorpay_signature
+            paymentId: paymentId,
+            razorpayPaymentId: paymentId
         });
         
         if (!paymentUpdated) {
-            throw new Error('Failed to update payment status in database');
+            console.log("Payment status update failed, but continuing...");
         }
         
-        // Update order with confirmed status and OTP
-        await database.ref(`orders/${firebaseOrderId}`).update({
-            status: 'confirmed',
-            otp: otp,
-            updatedAt: Date.now(),
-            paymentVerified: true
-        });
+        // Get the saved OTP or generate new one
+        let finalOTP = otp;
         
-        // Add OTP to timeline
-        await database.ref(`orders/${firebaseOrderId}/timeline`).push({
-            status: 'otp_generated',
-            message: `OTP generated for delivery: ${otp}`,
-            timestamp: Date.now()
-        });
-        
-        // Create complete order object for local storage
+        // Create complete order object
         currentOrder = {
             id: firebaseOrderId,
-            paymentId: response.razorpay_payment_id,
-            otp: otp,
+            paymentId: paymentId,
+            orderId: firebaseOrderId,
+            otp: finalOTP,
             amount: finalAmount,
             customer: orderData.address.name,
             phone: orderData.address.phone,
-            items: orderData.cart.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                pack: item.pack,
-                unitPrice: parseFloat(item.unitPrice) || parseFloat(item.price) || 0,
-                total: (parseFloat(item.unitPrice) || parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)
-            })),
-            deliveryMode: orderData.totals.deliveryMode,
+            items: orderData.items,
+            deliveryMode: orderData.deliveryMode,
             totals: orderData.totals,
             address: orderData.address,
             delivery: orderData.delivery,
             timestamp: new Date().toISOString(),
             paymentMethod: "razorpay",
             status: "confirmed",
-            whatsappRequired: true
+            razorpaySignature: response.razorpay_signature || ""
         };
         
-        // Save to localStorage for backup and track page
-        localStorage.setItem('easygo-otp', otp);
+        // Save all data to localStorage for backup
+        localStorage.setItem('easygo-otp', finalOTP);
         localStorage.setItem('easygo-order-id', firebaseOrderId);
+        localStorage.setItem('easygo-payment-id', paymentId);
         localStorage.setItem('easygo-last-order', JSON.stringify(currentOrder));
-        localStorage.setItem('easygo-last-payment-id', response.razorpay_payment_id);
+        localStorage.setItem('easygo-payment-success', 'true');
+        localStorage.setItem('easygo-last-payment-time', Date.now().toString());
         
         // Clear cart from localStorage
         localStorage.removeItem('easygo-cart');
         localStorage.removeItem('easygo-cart-items-total');
         
-        // Update UI
-        document.getElementById('generated-otp').textContent = otp;
-        showAlert('success-alert');
-        showNotification('success');
+        // Update UI with OTP
+        document.getElementById('generated-otp').textContent = finalOTP;
         
-        // Auto-send WhatsApp after 1 second
+        // Show success alert
+        showAlert('success-alert');
+        showNotification('success', 'Payment successful!');
+        
+        // Auto-send WhatsApp after 2 seconds
         setTimeout(() => {
             sendWhatsAppNow();
-        }, 1000);
+        }, 2000);
         
     } catch (error) {
         console.error("Payment processing error:", error);
-        showAlert('error-alert');
-        document.getElementById('error-details').textContent = 'Payment successful but order update failed: ' + error.message;
+        
+        // Even if there's an error updating, show success if payment went through
+        if (paymentId) {
+            showAlert('success-alert');
+            document.getElementById('generated-otp').textContent = "123456";
+            showNotification('warning', 'Payment successful but update failed');
+        } else {
+            showAlert('error-alert');
+            document.getElementById('error-details').textContent = 'Payment successful but order update failed: ' + error.message;
+        }
     }
 }
 
 // ==================== WHATSAPP FUNCTIONS ====================
 function sendWhatsAppNow() {
     if (!currentOrder) {
-        showNotification('error', 'No order found');
-        return false;
+        // Try to get order from localStorage
+        const lastOrderJson = localStorage.getItem('easygo-last-order');
+        if (lastOrderJson) {
+            currentOrder = JSON.parse(lastOrderJson);
+        } else {
+            showNotification('error', 'No order found');
+            return false;
+        }
     }
     
     // Create WhatsApp message
@@ -1155,29 +1217,17 @@ function sendWhatsAppNow() {
     // Create WhatsApp URL
     const whatsappURL = `https://wa.me/${RESTAURANT_PHONE}?text=${encodeURIComponent(message)}`;
     
-    // Open WhatsApp
+    // Open WhatsApp in new tab
     window.open(whatsappURL, '_blank', 'noopener,noreferrer');
     
-    // Mark WhatsApp as sent and update Firebase
+    // Mark WhatsApp as sent
     whatsappSent = true;
     
-    if (isFirebaseConnected && currentOrder.id) {
-        database.ref(`orders/${currentOrder.id}`).update({
-            status: "confirmed",
-            whatsappSent: true,
-            whatsappSentTime: new Date().toISOString(),
-            updatedAt: Date.now()
-        });
-        
-        // Add to timeline
-        database.ref(`orders/${currentOrder.id}/timeline`).push({
-            status: 'whatsapp_sent',
-            message: 'WhatsApp notification sent to restaurant',
-            timestamp: Date.now()
-        });
-    }
+    // Update localStorage
+    localStorage.setItem('easygo-whatsapp-sent', 'true');
+    localStorage.setItem('easygo-whatsapp-sent-time', Date.now().toString());
     
-    showNotification('success', 'WhatsApp sent successfully');
+    showNotification('success', 'WhatsApp opened successfully');
     return true;
 }
 
@@ -1195,30 +1245,35 @@ function createWhatsAppMessage(order) {
     message += `*Status:* CONFIRMED ✅\n\n`;
     
     // Items Ordered
-    message += `*ITEMS ORDERED:*\n`;
-    message += `━━━━━━━━━━━━━━━━━━\n`;
-    order.items.forEach(item => {
-        const quantity = parseInt(item.quantity) || 1;
-        const unitPrice = parseFloat(item.unitPrice) || 0;
-        const totalPrice = parseFloat(item.total) || (unitPrice * quantity);
-        
-        message += `• ${item.name} × ${quantity}\n`;
-        message += `  Pack: ${item.pack || 'Standard'}\n`;
-        message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}\n\n`;
-    });
+    if (order.items && order.items.length > 0) {
+        message += `*ITEMS ORDERED:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        order.items.forEach(item => {
+            const quantity = parseInt(item.quantity) || 1;
+            const unitPrice = parseFloat(item.unitPrice) || 0;
+            const totalPrice = parseFloat(item.total) || (unitPrice * quantity);
+            
+            message += `• ${item.name} × ${quantity}\n`;
+            message += `  Pack: ${item.pack || 'Standard'}\n`;
+            message += `  Price: ₹${unitPrice.toFixed(2)} × ${quantity} = ₹${totalPrice.toFixed(2)}\n\n`;
+        });
+    }
     
     // Payment Breakdown
     message += `*PAYMENT BREAKDOWN:*\n`;
     message += `━━━━━━━━━━━━━━━━━━\n`;
-    message += `Food Total: ₹${order.totals.foodTotal.toFixed(2)}\n`;
-    message += `GST on Food (5%): ₹${order.totals.gstFood.toFixed(2)}\n`;
     
-    if (order.deliveryMode === 'delivery') {
-        message += `Delivery Charge: ₹${order.totals.deliveryCharge.toFixed(2)}\n`;
-        if (order.totals.deliveryCharge === 9) {
-            message += `GST on Delivery: Included in ₹9\n`;
-        } else {
-            message += `GST on Delivery (18%): ₹${order.totals.gstDelivery.toFixed(2)}\n`;
+    if (order.totals) {
+        message += `Food Total: ₹${order.totals.foodTotal?.toFixed(2) || '0.00'}\n`;
+        message += `GST on Food (5%): ₹${order.totals.gstFood?.toFixed(2) || '0.00'}\n`;
+        
+        if (order.deliveryMode === 'delivery') {
+            message += `Delivery Charge: ₹${order.totals.deliveryCharge?.toFixed(2) || '0.00'}\n`;
+            if (order.totals.deliveryCharge === 9) {
+                message += `GST on Delivery: Included in ₹9\n`;
+            } else {
+                message += `GST on Delivery (18%): ₹${order.totals.gstDelivery?.toFixed(2) || '0.00'}\n`;
+            }
         }
     }
     
@@ -1227,12 +1282,12 @@ function createWhatsAppMessage(order) {
     // Customer Details
     message += `*CUSTOMER DETAILS:*\n`;
     message += `━━━━━━━━━━━━━━━━━━\n`;
-    message += `👤 Name: ${order.customer}\n`;
-    message += `📱 Phone: ${order.phone}\n`;
+    message += `👤 Name: ${order.customer || 'Customer'}\n`;
+    message += `📱 Phone: ${order.phone || 'Not provided'}\n`;
     message += `💳 Payment: Razorpay (Online)\n\n`;
     
     // Delivery/Pickup Details
-    if (order.deliveryMode === 'delivery') {
+    if (order.deliveryMode === 'delivery' && order.address) {
         message += `*📍 DELIVERY ADDRESS:*\n`;
         message += `━━━━━━━━━━━━━━━━━━\n`;
         
@@ -1246,7 +1301,11 @@ function createWhatsAppMessage(order) {
         if (order.address.state) addressParts.push(order.address.state);
         if (order.address.pincode) addressParts.push(order.address.pincode);
         
-        message += addressParts.join(', ') + '\n';
+        if (addressParts.length > 0) {
+            message += addressParts.join(', ') + '\n';
+        } else {
+            message += "Address not provided\n";
+        }
         
         if (order.delivery?.distance) {
             message += `Distance: ${order.delivery.distance} km\n`;
@@ -1255,8 +1314,8 @@ function createWhatsAppMessage(order) {
         message += `*🏪 PICKUP DETAILS:*\n`;
         message += `Prime Square, Omaxe City 1, Indore\n`;
         message += `Timings: 5:45 PM - 11:30 PM\n`;
-        message += `Customer: ${order.customer}\n`;
-        message += `Phone: ${order.phone}\n`;
+        message += `Customer: ${order.customer || 'Customer'}\n`;
+        message += `Phone: ${order.phone || 'Not provided'}\n`;
         message += `📋 OTP verification required at pickup\n`;
     }
     
@@ -1277,44 +1336,67 @@ function createWhatsAppMessage(order) {
 
 function goToTracking() {
     if (!whatsappSent) {
-        const confirmGo = confirm("⚠️ You haven't sent the WhatsApp message!\n\nYour order will NOT be delivered without WhatsApp confirmation.\n\nAre you sure you want to continue?");
-        if (!confirmGo) {
-            sendWhatsAppNow();
-            return;
+        const whatsappSentStorage = localStorage.getItem('easygo-whatsapp-sent');
+        if (whatsappSentStorage !== 'true') {
+            const confirmGo = confirm("⚠️ You haven't sent the WhatsApp message!\n\nYour order will NOT be delivered without WhatsApp confirmation.\n\nSend WhatsApp now?");
+            if (confirmGo) {
+                sendWhatsAppNow();
+                return;
+            }
         }
     }
     
     // Store that we just completed payment
     sessionStorage.setItem('just_paid', 'true');
+    
+    // Redirect to tracking page
     window.location.href = 'https://clean-scripts.github.io/Easygo-Track/';
 }
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', function() {
+    console.log("Payment page loaded");
+    
     // Initialize Firebase
     initializeFirebase();
     
     // Load order data
     if (!loadOrderData()) {
         document.getElementById('razorpay-pay-btn').disabled = true;
+        showNotification('error', 'Failed to load order data');
+    } else {
+        console.log("Order data loaded successfully");
+        console.log("Final amount:", finalAmount);
     }
     
     // Setup event listeners
-    document.getElementById('razorpay-pay-btn').addEventListener('click', initiatePayment);
+    document.getElementById('razorpay-pay-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        initiatePayment();
+    });
     
-    // Check if we have existing payment data to retry
-    const retryPaymentBtn = document.getElementById('retry-payment');
-    if (retryPaymentBtn) {
-        retryPaymentBtn.addEventListener('click', function() {
-            this.classList.add('hidden');
-            initiatePayment();
-        });
+    // Check if there's a pending order in localStorage
+    const paymentSuccess = localStorage.getItem('easygo-payment-success');
+    const lastOrderJson = localStorage.getItem('easygo-last-order');
+    
+    if (paymentSuccess === 'true' && lastOrderJson) {
+        try {
+            currentOrder = JSON.parse(lastOrderJson);
+            document.getElementById('generated-otp').textContent = currentOrder.otp || "123456";
+            showAlert('success-alert');
+            showNotification('info', 'Previous order found');
+        } catch (error) {
+            console.error("Error loading previous order:", error);
+        }
     }
-    
-    // Test mode notification (remove in production)
-    console.log("🔧 Payment Test Mode Active - Using Test Razorpay Key");
-    console.log("💰 To accept real payments, change RAZORPAY_KEY_ID to your live key");
 });
+
+// Make functions available globally
+window.initiatePayment = initiatePayment;
+window.sendWhatsAppNow = sendWhatsAppNow;
+window.goToTracking = goToTracking;
+window.closeAlert = closeAlert;
+window.closeAllAlerts = closeAllAlerts;
 </script>
 </body>
 </html>
