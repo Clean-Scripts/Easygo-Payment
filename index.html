@@ -114,42 +114,42 @@
 <body class="antialiased bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
 
     <script>
-            // Universal check for all pages
-            const cartItems = JSON.parse(localStorage.getItem('easygo-cart')) || [];
-            
-            // Only redirect if cart is completely empty
-            if (cartItems.length === 0) {
-                // Show simple message
-                document.body.innerHTML = `
-                    <div style="
-                        height: 100vh;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        flex-direction: column;
-                        padding: 20px;
-                        text-align: center;
-                        font-family: system-ui, -apple-system, sans-serif;
-                    ">
-                        <div style="font-size: 48px; margin-bottom: 20px;">🛒</div>
-                        <h2 style="margin-bottom: 10px; color: #333;">Your cart is empty</h2>
-                        <p style="color: #666; margin-bottom: 30px;">Redirecting to menu...</p>
-                        <div style="width: 200px; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
-                            <div style="height: 100%; background: #10b981; width: 0%; transition: width 2s linear;"></div>
-                        </div>
+        // Universal check for all pages
+        const cartItems = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+        
+        // Only redirect if cart is completely empty
+        if (cartItems.length === 0) {
+            // Show simple message
+            document.body.innerHTML = `
+                <div style="
+                    height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    padding: 20px;
+                    text-align: center;
+                    font-family: system-ui, -apple-system, sans-serif;
+                ">
+                    <div style="font-size: 48px; margin-bottom: 20px;">🛒</div>
+                    <h2 style="margin-bottom: 10px; color: #333;">Your cart is empty</h2>
+                    <p style="color: #666; margin-bottom: 30px;">Redirecting to menu...</p>
+                    <div style="width: 200px; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
+                        <div style="height: 100%; background: #10b981; width: 0%; transition: width 2s linear;"></div>
                     </div>
-                `;
-                
-                // Animate progress bar
-                setTimeout(() => {
-                    document.querySelector('div[style*="width: 0%"]').style.width = '100%';
-                }, 100);
-                
-                // Redirect after 2 seconds
-                setTimeout(() => {
-                    window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
-                }, 2000);
-            }
+                </div>
+            `;
+            
+            // Animate progress bar
+            setTimeout(() => {
+                document.querySelector('div[style*="width: 0%"]').style.width = '100%';
+            }, 100);
+            
+            // Redirect after 2 seconds
+            setTimeout(() => {
+                window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+            }, 2000);
+        }
     </script>
     
     <!-- Firebase Status Indicator -->
@@ -466,6 +466,7 @@ let finalAmount = 0;
 let paymentProcessing = false;
 let currentOrder = null;
 let whatsappSent = false;
+let isNewOrder = false; // NEW: Track if this is a new order session
 
 // Razorpay Configuration
 const RAZORPAY_KEY_ID = "rzp_live_RySoaT17nxFQSV";
@@ -511,11 +512,74 @@ function initializeFirebase() {
     }
 }
 
+// ==================== SESSION MANAGEMENT ====================
+function resetPaymentSession() {
+    // Clear any previous payment success flags
+    sessionStorage.removeItem('payment_success');
+    sessionStorage.removeItem('current_order_id');
+    
+    // Hide success alert if it was previously shown
+    closeAlert('success-alert');
+    
+    // Clear retry button
+    document.getElementById('retry-payment').classList.add('hidden');
+    
+    console.log("Payment session reset for new order");
+}
+
+function checkForPreviousOrder() {
+    // Check if there's a current session payment success
+    const sessionPaymentSuccess = sessionStorage.getItem('payment_success');
+    const sessionOrderId = sessionStorage.getItem('current_order_id');
+    
+    // Also check localStorage for any completed orders
+    const localStoragePaymentSuccess = localStorage.getItem('easygo-payment-success');
+    const lastOrderJson = localStorage.getItem('easygo-last-order');
+    
+    // NEW: Determine if we should show previous order
+    // Only show if:
+    // 1. It's the same session (user just paid)
+    // 2. AND cart is empty (order was placed)
+    // 3. AND we're not in a fresh payment page load
+    
+    const cartItems = JSON.parse(localStorage.getItem('easygo-cart') || '[]');
+    const justPaid = sessionStorage.getItem('just_paid') === 'true';
+    
+    if (sessionPaymentSuccess === 'true' && sessionOrderId && cartItems.length === 0) {
+        // This means user just completed payment in this session
+        console.log("Found current session payment success");
+        
+        try {
+            if (lastOrderJson) {
+                currentOrder = JSON.parse(lastOrderJson);
+                document.getElementById('generated-otp').textContent = currentOrder.otp || "123456";
+                showAlert('success-alert');
+                showNotification('info', 'Order payment successful!');
+                return true;
+            }
+        } catch (error) {
+            console.error("Error loading session order:", error);
+        }
+    } else if (localStoragePaymentSuccess === 'true' && cartItems.length > 0) {
+        // User has cart items but also has a previous success
+        // This is likely a new order, so clear the previous success
+        console.log("Clearing previous payment success for new order");
+        localStorage.removeItem('easygo-payment-success');
+        localStorage.removeItem('easygo-order-id');
+        localStorage.removeItem('easygo-payment-id');
+        return false;
+    }
+    
+    return false;
+}
+
+// ==================== ORDER SAVING FUNCTIONS ====================
 async function saveOrderToFirebase(orderData) {
     try {
         // Create unique order ID
         const orderId = `EG${Date.now()}${Math.floor(Math.random() * 1000)}`;
         const timestamp = Date.now();
+        const otp = generateOTP();
         
         // Prepare order data for Firebase
         const firebaseOrderData = {
@@ -530,7 +594,7 @@ async function saveOrderToFirebase(orderData) {
             paymentMethod: "Razorpay",
             paymentStatus: "pending",
             status: "pending",
-            otp: generateOTP(),
+            otp: otp,
             gstFood: orderData.totals?.gstFood || 0,
             deliveryCharge: orderData.totals?.deliveryCharge || 0,
             gstDelivery: orderData.totals?.gstDelivery || 0,
@@ -550,27 +614,20 @@ async function saveOrderToFirebase(orderData) {
         
         console.log("Saving order to Firebase:", firebaseOrderData);
         
-        // Save to Firebase - using set() instead of push() to control the key
+        // Save to Firebase
         await database.ref(`orders/${orderId}`).set(firebaseOrderData);
         
         console.log("Order saved successfully to Firebase with ID:", orderId);
         showNotification('success', 'Order saved to database');
         
-        return orderId;
+        return { orderId, otp };
         
     } catch (error) {
         console.error("Error saving order to Firebase:", error);
         console.error("Error details:", error.message, error.code);
         
-        // For debugging - try alternative approach
-        if (error.code === 'PERMISSION_DENIED') {
-            console.log("⚠️ Firebase Permission Denied - Switching to Local Storage Mode");
-            showNotification('warning', 'Using local storage backup');
-            return saveOrderToLocalStorage(orderData);
-        }
-        
-        showNotification('error', 'Failed to save order. Please contact support.');
-        return null;
+        // Fallback to local storage
+        return saveOrderToLocalStorage(orderData);
     }
 }
 
@@ -605,7 +662,7 @@ function saveOrderToLocalStorage(orderData) {
         localStorage.setItem(`easygo-local-order-${orderId}`, JSON.stringify(localOrderData));
         
         console.log("Order saved to localStorage as backup:", orderId);
-        return orderId;
+        return { orderId, otp };
         
     } catch (error) {
         console.error("Error saving to localStorage:", error);
@@ -613,19 +670,21 @@ function saveOrderToLocalStorage(orderData) {
     }
 }
 
-async function updateOrderPaymentStatus(orderId, paymentData) {
+async function updateOrderPaymentStatus(orderId, paymentData, otp) {
     try {
         if (!isFirebaseConnected || !orderId) {
             console.log("⚠️ Firebase not connected or no orderId, updating localStorage");
-            return updateLocalOrderPaymentStatus(orderId, paymentData);
+            return updateLocalOrderPaymentStatus(orderId, paymentData, otp);
         }
         
         const updates = {
             paymentStatus: paymentData.status,
             paymentId: paymentData.paymentId,
             razorpayPaymentId: paymentData.razorpayPaymentId,
+            otp: otp,
             updatedAt: Date.now(),
-            status: 'confirmed'
+            status: 'confirmed',
+            confirmedAt: Date.now()
         };
         
         // Add to timeline
@@ -646,14 +705,14 @@ async function updateOrderPaymentStatus(orderId, paymentData) {
         
         // Fallback to localStorage
         if (error.code === 'PERMISSION_DENIED') {
-            return updateLocalOrderPaymentStatus(orderId, paymentData);
+            return updateLocalOrderPaymentStatus(orderId, paymentData, otp);
         }
         
         return false;
     }
 }
 
-function updateLocalOrderPaymentStatus(orderId, paymentData) {
+function updateLocalOrderPaymentStatus(orderId, paymentData, otp) {
     try {
         // Get order from localStorage
         const orderKey = `easygo-local-order-${orderId}`;
@@ -664,6 +723,7 @@ function updateLocalOrderPaymentStatus(orderId, paymentData) {
             order.paymentStatus = paymentData.status;
             order.paymentId = paymentData.paymentId;
             order.razorpayPaymentId = paymentData.razorpayPaymentId;
+            order.otp = otp;
             order.updatedAt = Date.now();
             order.status = 'confirmed';
             
@@ -726,18 +786,29 @@ function hideLoading() {
 // ==================== ORDER DATA LOADING ====================
 function loadOrderData() {
     try {
+        // Clear any previous session data
+        resetPaymentSession();
+        
         // Load from localStorage (from previous pages)
         const cart = JSON.parse(localStorage.getItem('easygo-cart') || '[]');
         const address = JSON.parse(localStorage.getItem('easygo-address') || '{}');
         const delivery = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
         
         if (cart.length === 0) {
+            // Check if user just completed payment
+            if (checkForPreviousOrder()) {
+                return true; // Don't disable button, just show success
+            }
+            
             showAlert('error-alert');
             document.getElementById('error-title').textContent = 'Empty Cart';
             document.getElementById('error-message').textContent = 'Your cart is empty. Please add items first.';
             document.getElementById('razorpay-pay-btn').disabled = true;
             return false;
         }
+        
+        // Mark this as a new order session
+        isNewOrder = true;
         
         // Get delivery mode
         const deliveryMode = address.deliveryMode || 'takeaway';
@@ -1046,6 +1117,12 @@ async function initiatePayment() {
         return;
     }
     
+    // Clear any previous order data from localStorage
+    localStorage.removeItem('easygo-payment-success');
+    localStorage.removeItem('easygo-last-order');
+    localStorage.removeItem('easygo-order-id');
+    localStorage.removeItem('easygo-payment-id');
+    
     paymentProcessing = true;
     showLoading();
     
@@ -1053,7 +1130,7 @@ async function initiatePayment() {
         console.log("Initiating payment for amount:", finalAmount);
         
         // First save order to Firebase (with pending status)
-        const firebaseOrderId = await saveOrderToFirebase({
+        const savedOrder = await saveOrderToFirebase({
             customerPhone: orderData.address.phone,
             customerName: orderData.address.name,
             items: orderData.items,
@@ -1065,14 +1142,14 @@ async function initiatePayment() {
             totals: orderData.totals
         });
         
-        if (!firebaseOrderId) {
+        if (!savedOrder || !savedOrder.orderId) {
             throw new Error('Failed to save order');
         }
         
-        console.log("Order saved with ID:", firebaseOrderId);
+        console.log("Order saved with ID:", savedOrder.orderId);
         
         // Store Firebase order ID in localStorage
-        localStorage.setItem('easygo-firebase-order-id', firebaseOrderId);
+        localStorage.setItem('easygo-firebase-order-id', savedOrder.orderId);
         localStorage.setItem('easygo-current-order-data', JSON.stringify(orderData));
         
         // Create Razorpay order
@@ -1081,7 +1158,7 @@ async function initiatePayment() {
             amount: Math.round(finalAmount * 100), // Amount in paise
             currency: "INR",
             name: "Easy Go",
-            description: `Order #${firebaseOrderId} - ${orderData.address.name}`,
+            description: `Order #${savedOrder.orderId} - ${orderData.address.name}`,
             prefill: {
                 name: orderData.address.name || "Customer",
                 contact: orderData.address.phone || "",
@@ -1089,7 +1166,7 @@ async function initiatePayment() {
             },
             handler: async function(response) {
                 console.log("Payment success response:", response);
-                await handlePaymentSuccess(response.razorpay_payment_id, firebaseOrderId, response);
+                await handlePaymentSuccess(response.razorpay_payment_id, savedOrder.orderId, savedOrder.otp, response);
             },
             theme: { 
                 color: "#10B981"
@@ -1115,13 +1192,13 @@ async function initiatePayment() {
             hideLoading();
             
             // Update Firebase with failed status
-            if (firebaseOrderId) {
+            if (savedOrder.orderId) {
                 try {
-                    await updateOrderPaymentStatus(firebaseOrderId, {
+                    await updateOrderPaymentStatus(savedOrder.orderId, {
                         status: 'failed',
                         paymentId: response.error.metadata?.payment_id || 'failed',
                         razorpayPaymentId: response.error.metadata?.payment_id || 'failed'
-                    });
+                    }, savedOrder.otp);
                 } catch (error) {
                     console.error("Failed to update payment status:", error);
                 }
@@ -1148,11 +1225,11 @@ async function initiatePayment() {
     }
 }
 
-async function handlePaymentSuccess(paymentId, firebaseOrderId, response) {
+async function handlePaymentSuccess(paymentId, firebaseOrderId, otp, response) {
     paymentProcessing = false;
     hideLoading();
     
-    console.log("Payment success:", paymentId, firebaseOrderId, response);
+    console.log("Payment success:", paymentId, firebaseOrderId, otp, response);
     
     if (!paymentId || !firebaseOrderId) {
         showAlert('error-alert');
@@ -1161,29 +1238,23 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId, response) {
     }
     
     try {
-        // Generate OTP
-        const otp = generateOTP();
-        
         // Update Firebase with successful payment
         const paymentUpdated = await updateOrderPaymentStatus(firebaseOrderId, {
             status: 'success',
             paymentId: paymentId,
             razorpayPaymentId: paymentId
-        });
+        }, otp);
         
         if (!paymentUpdated) {
             console.log("Payment status update failed, but continuing...");
         }
-        
-        // Get the saved OTP or generate new one
-        let finalOTP = otp;
         
         // Create complete order object
         currentOrder = {
             id: firebaseOrderId,
             paymentId: paymentId,
             orderId: firebaseOrderId,
-            otp: finalOTP,
+            otp: otp,
             amount: finalAmount,
             customer: orderData.address.name,
             phone: orderData.address.phone,
@@ -1199,7 +1270,7 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId, response) {
         };
         
         // Save all data to localStorage for backup
-        localStorage.setItem('easygo-otp', finalOTP);
+        localStorage.setItem('easygo-otp', otp);
         localStorage.setItem('easygo-order-id', firebaseOrderId);
         localStorage.setItem('easygo-payment-id', paymentId);
         localStorage.setItem('easygo-last-order', JSON.stringify(currentOrder));
@@ -1210,8 +1281,12 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId, response) {
         localStorage.removeItem('easygo-cart');
         localStorage.removeItem('easygo-cart-items-total');
         
+        // Set session storage to mark this as current session payment
+        sessionStorage.setItem('payment_success', 'true');
+        sessionStorage.setItem('current_order_id', firebaseOrderId);
+        
         // Update UI with OTP
-        document.getElementById('generated-otp').textContent = finalOTP;
+        document.getElementById('generated-otp').textContent = otp;
         
         // Show success alert
         showAlert('success-alert');
@@ -1228,7 +1303,7 @@ async function handlePaymentSuccess(paymentId, firebaseOrderId, response) {
         // Even if there's an error updating, show success if payment went through
         if (paymentId) {
             showAlert('success-alert');
-            document.getElementById('generated-otp').textContent = "123456";
+            document.getElementById('generated-otp').textContent = otp || "123456";
             showNotification('warning', 'Payment successful but update failed');
         } else {
             showAlert('error-alert');
@@ -1385,7 +1460,7 @@ function goToTracking() {
         }
     }
     
-    // Store that we just completed payment
+    // Mark that we just completed payment for tracking page
     sessionStorage.setItem('just_paid', 'true');
     
     // Redirect to tracking page
@@ -1398,6 +1473,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize Firebase
     initializeFirebase();
+    
+    // Check URL parameters for payment success
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentSuccess = urlParams.get('payment_success');
+    
+    if (paymentSuccess === 'true') {
+        // This handles callback from Razorpay
+        showAlert('success-alert');
+        showNotification('success', 'Payment successful!');
+    }
     
     // Load order data
     if (!loadOrderData()) {
@@ -1413,21 +1498,6 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         initiatePayment();
     });
-    
-    // Check if there's a pending order in localStorage
-    const paymentSuccess = localStorage.getItem('easygo-payment-success');
-    const lastOrderJson = localStorage.getItem('easygo-last-order');
-    
-    if (paymentSuccess === 'true' && lastOrderJson) {
-        try {
-            currentOrder = JSON.parse(lastOrderJson);
-            document.getElementById('generated-otp').textContent = currentOrder.otp || "123456";
-            showAlert('success-alert');
-            showNotification('info', 'Previous order found');
-        } catch (error) {
-            console.error("Error loading previous order:", error);
-        }
-    }
 });
 
 // Make functions available globally
